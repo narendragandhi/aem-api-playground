@@ -127,6 +127,26 @@ public class AssetsApi {
         return client.delete(API_BASE + apiPath);
     }
 
+    public int moveBatch(List<String> sourcePaths, String targetFolder) throws IOException {
+        int moved = 0;
+        for (String sourcePath : sourcePaths) {
+            try {
+                String sourceApiPath = normalizePath(sourcePath);
+                String targetApiPath = normalizePath(targetFolder) + "/" + sourcePath.substring(sourcePath.lastIndexOf("/") + 1);
+                
+                ObjectNode moveRequest = mapper.createObjectNode();
+                moveRequest.put("operation", "move");
+                moveRequest.put("destination", targetApiPath);
+                
+                client.post(API_BASE + sourceApiPath + ".move.json", moveRequest);
+                moved++;
+            } catch (Exception e) {
+                System.err.println("Failed to move " + sourcePath + ": " + e.getMessage());
+            }
+        }
+        return moved;
+    }
+
     public Asset upload(String folderPath, String fileName, byte[] data, String mimeType) throws IOException {
         String apiPath = normalizePath(folderPath);
         ObjectNode request = mapper.createObjectNode();

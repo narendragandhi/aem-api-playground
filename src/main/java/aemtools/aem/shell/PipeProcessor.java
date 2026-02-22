@@ -187,6 +187,16 @@ public class PipeProcessor {
                 context.previousResults = filtered;
                 System.out.println("Filtered to " + filtered.size() + " items");
                 break;
+            case "filter":
+                if (args.length < 2) {
+                    System.out.println("Filter options:");
+                    System.out.println("  pipe filter --older-than <days>    Filter by age");
+                    System.out.println("  pipe filter --modified-after <date> Filter by date");
+                    System.out.println("  pipe filter --field <key> <value>  Filter by field value");
+                    return;
+                }
+                handleFilter(args, context);
+                break;
             case "head":
                 int headCount = args.length > 1 ? Integer.parseInt(args[1]) : 10;
                 if (context.previousResults.size() > headCount) {
@@ -282,6 +292,93 @@ public class PipeProcessor {
             System.out.println(row);
         }
         System.out.println(separator);
+    }
+
+    private void handleFilter(String[] args, PipeContext context) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        for (int i = 1; i < args.length; i++) {
+            String arg = args[i];
+            
+            if (arg.equals("--older-than") && i + 1 < args.length) {
+                int days = Integer.parseInt(args[++i]);
+                long cutoffTime = System.currentTimeMillis() - (days * 24L * 60L * 60L * 1000L);
+                
+                for (Map<String, Object> item : context.previousResults) {
+                    Object modified = item.get("modified");
+                    if (modified != null) {
+                        try {
+                            long itemTime = parseDateToTimestamp(modified.toString());
+                            if (itemTime < cutoffTime) {
+                                result.add(item);
+                            }
+                        } catch (Exception e) {
+                            // Skip if can't parse
+                        }
+                    }
+                }
+                context.previousResults = result;
+                System.out.println("Filtered to " + result.size() + " items older than " + days + " days");
+                
+            } else if (arg.equals("--modified-after") && i + 1 < args.length) {
+                String dateStr = args[++i];
+                long cutoffTime;
+                try {
+                    cutoffTime = parseDateToTimestamp(dateStr);
+                } catch (Exception e) {
+                    System.out.println("Error parsing date: " + dateStr);
+                    continue;
+                }
+                
+                for (Map<String, Object> item : context.previousResults) {
+                    Object modified = item.get("modified");
+                    if (modified != null) {
+                        try {
+                            long itemTime = parseDateToTimestamp(modified.toString());
+                            if (itemTime > cutoffTime) {
+                                result.add(item);
+                            }
+                        } catch (Exception e) {
+                            // Skip
+                        }
+                    }
+                }
+                context.previousResults = result;
+                System.out.println("Filtered to " + result.size() + " items modified after " + dateStr);
+                
+            } else if (arg.equals("--field") && i + 2 < args.length) {
+                String field = args[++i];
+                String value = args[++i];
+                
+                for (Map<String, Object> item : context.previousResults) {
+                    Object fieldValue = item.get(field);
+                    if (fieldValue != null && fieldValue.toString().equalsIgnoreCase(value)) {
+                        result.add(item);
+                    }
+                }
+                context.previousResults = result;
+                System.out.println("Filtered to " + result.size() + " items with " + field + "=" + value);
+            }
+        }
+    }
+
+    private long parseDateToTimestamp(String dateStr) throws Exception {
+        try {
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(dateStr.replace(" ", "T"));
+            return ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        } catch (Exception e) {
+            try {
+                java.time.Instant inst = java.time.Instant.parse(dateStr);
+                return inst.toEpochMilli();
+            } catch (Exception e2) {
+                try {
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+                    return sdf.parse(dateStr).getTime();
+                } catch (Exception e3) {
+                    return 0;
+                }
+            }
+        }
     }
 
     private void printHelp() {

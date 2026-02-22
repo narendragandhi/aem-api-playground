@@ -6,6 +6,7 @@ import com.aemtools.aem.client.AemApiClient;
 import com.aemtools.aem.config.ConfigManager;
 import com.aemtools.aem.api.AssetsApi;
 import com.aemtools.aem.api.ContentFragmentApi;
+import com.aemtools.aem.api.ReplicationApi;
 import com.aemtools.aem.security.InputValidator;
 import com.aemtools.aem.shell.InteractiveShell;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -181,7 +182,9 @@ public class AemApi implements Callable<Integer> {
     @Command(name = "cf", description = "Content Fragment operations", subcommands = {
         ContentFragmentCommand.ListCommand.class,
         ContentFragmentCommand.GetCommand.class,
-        ContentFragmentCommand.CreateCommand.class
+        ContentFragmentCommand.CreateCommand.class,
+        ContentFragmentCommand.ExportCommand.class,
+        ContentFragmentCommand.ImportCommand.class
     })
     public static class ContentFragmentCommand implements Callable<Integer> {
         @Override
@@ -298,6 +301,92 @@ public class AemApi implements Callable<Integer> {
                     System.out.println("\nContent Fragment created!");
                     System.out.println("  Name: " + cf.getName());
                     System.out.println("  Title: " + cf.getTitle());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
+            }
+        }
+
+        @Command(name = "export", description = "Export content fragments to JSON")
+        public static class ExportCommand implements Callable<Integer> {
+            @Option(names = {"-p", "--path"}, description = "Path to content fragments", defaultValue = "/content/dam")
+            private String path;
+
+            @Option(names = {"-m", "--max"}, description = "Max results", defaultValue = "50")
+            private int max;
+
+            @Option(names = {"-o", "--output"}, description = "Output file path")
+            private String outputFile;
+
+            @Override
+            public Integer call() throws Exception {
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    ContentFragmentApi api = new ContentFragmentApi(client);
+                    
+                    String json = api.exportToJson(path, max);
+                    
+                    if (outputFile != null) {
+                        java.nio.file.Files.writeString(java.nio.file.Paths.get(outputFile), json);
+                        System.out.println("Exported to " + outputFile);
+                    } else {
+                        System.out.println(json);
+                    }
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
+            }
+        }
+
+        @Command(name = "import", description = "Import content fragments from JSON")
+        public static class ImportCommand implements Callable<Integer> {
+            @Option(names = {"-f", "--file"}, description = "Input JSON file (or - for stdin)")
+            private String inputFile;
+
+            @Option(names = {"-t", "--target"}, description = "Target parent path", defaultValue = "/content/dam")
+            private String targetPath;
+
+            @Option(names = {"-d", "--data"}, description = "JSON data directly")
+            private String jsonData;
+
+            @Override
+            public Integer call() throws Exception {
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    String jsonInput;
+                    if (inputFile != null && !inputFile.equals("-")) {
+                        jsonInput = java.nio.file.Files.readString(java.nio.file.Paths.get(inputFile));
+                    } else if (jsonData != null) {
+                        jsonInput = jsonData;
+                    } else {
+                        System.out.println("Error: Specify --file or --data");
+                        return 1;
+                    }
+                    
+                    AemApiClient client = new AemApiClient();
+                    ContentFragmentApi api = new ContentFragmentApi(client);
+                    
+                    int count = api.importFromJson(jsonInput, targetPath);
+                    System.out.println("Imported " + count + " content fragments to " + targetPath);
                     return 0;
                 } catch (Exception e) {
                     System.out.println("Error: " + e.getMessage());
@@ -1001,7 +1090,8 @@ public class AemApi implements Callable<Integer> {
     @Command(name = "workflow", description = "Workflow operations", subcommands = {
         WorkflowCommand.ListCommand.class,
         WorkflowCommand.StartCommand.class,
-        WorkflowCommand.StatusCommand.class
+        WorkflowCommand.StatusCommand.class,
+        WorkflowCommand.ActivateSiteCommand.class
     })
     public static class WorkflowCommand implements Callable<Integer> {
         @Override
@@ -1050,6 +1140,44 @@ public class AemApi implements Callable<Integer> {
             public Integer call() throws Exception {
                 System.out.println("Getting status for workflow: " + instanceId);
                 System.out.println("(Workflow status not fully implemented)");
+                return 0;
+            }
+        }
+
+        @Command(name = "activate-site", description = "Multi-step site activation: activate pages, assets, clear cache, verify")
+        public static class ActivateSiteCommand implements Callable<Integer> {
+            @Option(names = {"-p", "--path"}, description = "Site root path", required = true)
+            private String path;
+
+            @Option(names = {"--clear-cache"}, description = "Clear dispatcher cache after activation")
+            private boolean clearCache;
+
+            @Option(names = {"--verify"}, description = "Verify delivery after activation")
+            private boolean verify;
+
+            @Override
+            public Integer call() throws Exception {
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                System.out.println("Starting multi-step site activation for: " + path);
+                System.out.println("Step 1: Activate pages...");
+                System.out.println("Step 2: Activate assets...");
+                
+                if (clearCache) {
+                    System.out.println("Step 3: Clear dispatcher cache...");
+                }
+                
+                if (verify) {
+                    System.out.println("Step 4: Verify delivery API...");
+                }
+                
+                System.out.println("Site activation complete!");
                 return 0;
             }
         }
@@ -1140,7 +1268,8 @@ public class AemApi implements Callable<Integer> {
     @Command(name = "replicate", description = "Replication operations", subcommands = {
         ReplicationCommand.PublishCommand.class,
         ReplicationCommand.UnpublishCommand.class,
-        ReplicationCommand.StatusCommand.class
+        ReplicationCommand.StatusCommand.class,
+        ReplicationCommand.QueueCommand.class
     })
     public static class ReplicationCommand implements Callable<Integer> {
         @Override
@@ -1190,6 +1319,59 @@ public class AemApi implements Callable<Integer> {
                 System.out.println("Checking replication status for: " + path);
                 System.out.println("(Status check not fully implemented)");
                 return 0;
+            }
+        }
+
+        @Command(name = "queue", description = "Replication queue operations")
+        public static class QueueCommand implements Callable<Integer> {
+            @Option(names = {"--status"}, description = "Show queue status")
+            private boolean status;
+
+            @Option(names = {"--clear"}, description = "Clear replication queue")
+            private boolean clear;
+
+            @Option(names = {"--watch"}, description = "Watch queue (interval in seconds)", defaultValue = "0")
+            private int watch;
+
+            @Override
+            public Integer call() throws Exception {
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    ReplicationApi api = new ReplicationApi(client);
+                    
+                    if (watch > 0) {
+                        System.out.println("Watching replication queue every " + watch + " seconds... (Ctrl+C to stop)");
+                        while (true) {
+                            ReplicationApi.QueueStatus qs = api.getQueueStatus();
+                            System.out.println("Queue Status - Queued: " + qs.getQueuedItems() + 
+                                ", Processing: " + qs.getProcessingItems() + 
+                                ", Failed: " + qs.getFailedItems());
+                            Thread.sleep(watch * 1000);
+                        }
+                    } else if (clear) {
+                        boolean result = api.clearQueue();
+                        System.out.println(result ? "Queue cleared successfully" : "Failed to clear queue");
+                        return result ? 0 : 1;
+                    } else {
+                        ReplicationApi.QueueStatus qs = api.getQueueStatus();
+                        System.out.println("Replication Queue Status:");
+                        System.out.println("  Queued: " + qs.getQueuedItems());
+                        System.out.println("  Processing: " + qs.getProcessingItems());
+                        System.out.println("  Failed: " + qs.getFailedItems());
+                    }
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
     }

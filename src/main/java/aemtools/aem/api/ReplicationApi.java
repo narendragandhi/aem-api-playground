@@ -96,6 +96,25 @@ public class ReplicationApi {
         return agents;
     }
 
+    public QueueStatus getQueueStatus() throws IOException {
+        JsonNode response = client.get("/bin/replicate.json?cmd=queueStatus");
+        
+        QueueStatus status = new QueueStatus();
+        status.setQueuedItems(response.path("queued").asInt(0));
+        status.setProcessingItems(response.path("processing").asInt(0));
+        status.setFailedItems(response.path("failed").asInt(0));
+        
+        return status;
+    }
+
+    public boolean clearQueue() throws IOException {
+        ObjectNode request = mapper.createObjectNode();
+        request.put("cmd", "clearQueue");
+        
+        JsonNode response = client.post("/bin/replicate.json", request);
+        return response.has("success") && response.get("success").asBoolean();
+    }
+
     public static class ReplicationStatus {
         private String path;
         private boolean published;
@@ -110,6 +129,19 @@ public class ReplicationApi {
         public void setLastPublished(String lastPublished) { this.lastPublished = lastPublished; }
         public int getReplicationCount() { return replicationCount; }
         public void setReplicationCount(int replicationCount) { this.replicationCount = replicationCount; }
+    }
+
+    public static class QueueStatus {
+        private int queuedItems;
+        private int processingItems;
+        private int failedItems;
+
+        public int getQueuedItems() { return queuedItems; }
+        public void setQueuedItems(int queuedItems) { this.queuedItems = queuedItems; }
+        public int getProcessingItems() { return processingItems; }
+        public void setProcessingItems(int processingItems) { this.processingItems = processingItems; }
+        public int getFailedItems() { return failedItems; }
+        public void setFailedItems(int failedItems) { this.failedItems = failedItems; }
     }
 
     public static class ReplicationAgent {

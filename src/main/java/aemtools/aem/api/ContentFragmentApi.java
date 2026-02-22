@@ -65,6 +65,62 @@ public class ContentFragmentApi {
         return client.put("/api/content/fragments" + path + ".json", data);
     }
 
+    public String exportToJson(String folderPath, int limit) throws IOException {
+        List<ContentFragment> fragments = list(folderPath, limit);
+        ArrayNode jsonArray = mapper.createArrayNode();
+        
+        for (ContentFragment cf : fragments) {
+            ObjectNode cfNode = mapper.createObjectNode();
+            cfNode.put("path", cf.getPath());
+            cfNode.put("name", cf.getName());
+            cfNode.put("title", cf.getTitle());
+            cfNode.put("model", cf.getModel());
+            cfNode.put("description", cf.getDescription());
+            cfNode.put("created", cf.getCreated());
+            cfNode.put("modified", cf.getModified());
+            
+            try {
+                JsonNode fullData = client.get(cf.getPath() + ".json");
+                if (fullData.has("elements")) {
+                    cfNode.set("elements", fullData.get("elements"));
+                }
+                if (fullData.has("variations")) {
+                    cfNode.set("variations", fullData.get("variations"));
+                }
+            } catch (Exception e) {
+                // Skip full data if not accessible
+            }
+            
+            jsonArray.add(cfNode);
+        }
+        
+        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonArray);
+    }
+
+    public int importFromJson(String jsonInput, String targetPath) throws IOException {
+        ArrayNode fragments = (ArrayNode) mapper.readTree(jsonInput);
+        int imported = 0;
+        
+        for (JsonNode cfNode : fragments) {
+            String name = cfNode.path("name").asText();
+            String model = cfNode.path("model").asText();
+            String title = cfNode.path("title").asText();
+            
+            if (name.isEmpty() || model.isEmpty()) {
+                continue;
+            }
+            
+            try {
+                create(targetPath, name, model, title);
+                imported++;
+            } catch (Exception e) {
+                System.err.println("Failed to import " + name + ": " + e.getMessage());
+            }
+        }
+        
+        return imported;
+    }
+
     public List<ContentFragment> search(String query, int limit) throws IOException {
         ObjectNode searchRequest = mapper.createObjectNode();
         searchRequest.put("query", query);
