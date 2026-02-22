@@ -29,7 +29,7 @@ public class AssetsApi {
         String apiPath = normalizePath(folderPath);
         String url = API_BASE + apiPath + ".1.json";
         if (limit > 0) {
-            url += "?limit=" + limit;
+            url += (url.contains("?") ? "&" : "?") + "limit=" + limit;
         }
         
         JsonNode response = client.get(url);
@@ -38,8 +38,24 @@ public class AssetsApi {
         if (response.has("entities")) {
             ArrayNode entities = (ArrayNode) response.get("entities");
             for (JsonNode entity : entities) {
-                if (entity.has("class") && "asset".equals(entity.get("class").asText())) {
+                String className = "";
+                JsonNode classNode = entity.get("class");
+                if (classNode != null) {
+                    if (classNode.isArray()) {
+                        className = classNode.elements().hasNext() ? classNode.elements().next().asText() : "";
+                    } else {
+                        className = classNode.asText();
+                    }
+                }
+                
+                if ("asset".equals(className) || "assets/asset".equals(className)) {
                     assets.add(parseAsset(entity));
+                } else if (className.contains("folder")) {
+                    Asset folderAsset = new Asset();
+                    folderAsset.setName(entity.path("properties").path("name").asText());
+                    folderAsset.setTitle(entity.path("properties").path("dc:title").asText(folderAsset.getName()));
+                    folderAsset.setMimeType("folder");
+                    assets.add(folderAsset);
                 }
             }
         } else if (response.isArray()) {

@@ -4,6 +4,7 @@ import com.example.aem.agent.AemAgent;
 import com.example.aem.agent.AgentMemory;
 import com.example.aem.client.AemApiClient;
 import com.example.aem.config.ConfigManager;
+import com.example.aem.api.AssetsApi;
 import com.example.aem.security.InputValidator;
 import com.example.aem.shell.InteractiveShell;
 import picocli.CommandLine;
@@ -11,6 +12,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.Callable;
 
 @Command(
@@ -271,9 +273,39 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Listing assets in: " + path + " (max: " + max + ")");
-                System.out.println("(Demo mode - API client not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    AssetsApi api = new AssetsApi(client);
+                    
+                    List<AssetsApi.Asset> assets = api.list(path, max);
+                    
+                    System.out.println("\nAssets in " + path + ":\n");
+                    if (assets.isEmpty()) {
+                        System.out.println("  (no assets found - trying subfolders)");
+                        List<AssetsApi.Folder> folders = api.listFolders(path);
+                        for (AssetsApi.Folder folder : folders) {
+                            System.out.println("  [folder] " + folder.getName());
+                        }
+                    } else {
+                        for (AssetsApi.Asset asset : assets) {
+                            System.out.println("  " + asset);
+                        }
+                    }
+                    System.out.println("\nTotal: " + assets.size());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    e.printStackTrace();
+                    return 1;
+                }
             }
         }
 
