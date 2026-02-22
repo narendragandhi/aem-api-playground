@@ -15,6 +15,8 @@ import java.util.List;
 
 public class AssetsApi {
 
+    private static final String API_BASE = "/api/assets";
+    
     private final AemApiClient client;
     private final ObjectMapper mapper;
 
@@ -24,15 +26,21 @@ public class AssetsApi {
     }
 
     public List<Asset> list(String folderPath, int limit) throws IOException {
-        String url = folderPath + ".1.json?type=dam:Asset&p.limit=" + limit;
+        String apiPath = normalizePath(folderPath);
+        String url = API_BASE + apiPath + ".1.json";
+        if (limit > 0) {
+            url += "?limit=" + limit;
+        }
         
         JsonNode response = client.get(url);
         List<Asset> assets = new ArrayList<>();
         
-        if (response.has("data")) {
-            ArrayNode data = (ArrayNode) response.get("data");
-            for (JsonNode node : data) {
-                assets.add(parseAsset(node));
+        if (response.has("entities")) {
+            ArrayNode entities = (ArrayNode) response.get("entities");
+            for (JsonNode entity : entities) {
+                if (entity.has("class") && "asset".equals(entity.get("class").asText())) {
+                    assets.add(parseAsset(entity));
+                }
             }
         } else if (response.isArray()) {
             for (JsonNode node : response) {
@@ -43,94 +51,187 @@ public class AssetsApi {
         return assets;
     }
 
+    public List<Folder> listFolders(String folderPath) throws IOException {
+        String apiPath = normalizePath(folderPath);
+        String url = API_BASE + apiPath + ".1.json";
+        
+        JsonNode response = client.get(url);
+        List<Folder> folders = new ArrayList<>();
+        
+        if (response.has("entities")) {
+            ArrayNode entities = (ArrayNode) response.get("entities");
+            for (JsonNode entity : entities) {
+                if (entity.has("class") && "assetFolder".equals(entity.get("class").asText())) {
+                    folders.add(parseFolder(entity));
+                }
+            }
+        }
+        
+        return folders;
+    }
+
     public Asset get(String path) throws IOException {
-        JsonNode response = client.get(path + ".json");
+        String apiPath = normalizePath(path);
+        JsonNode response = client.get(API_BASE + apiPath + ".json");
         return parseAsset(response);
     }
 
-    public Asset upload(String folderPath, String fileName, byte[] data, String mimeType) throws IOException {
-        ObjectNode metadata = mapper.createObjectNode();
-        metadata.put("name", fileName);
-        metadata.put("mimeType", mimeType);
-        metadata.put("title", fileName);
+    public Folder createFolder(String parentPath, String folderName, String title) throws IOException {
+        ObjectNode folderRequest = mapper.createObjectNode();
+        folderRequest.put("class", "assetFolder");
+        ObjectNode properties = mapper.createObjectNode();
+        properties.put("title", title != null ? title : folderName);
+        folderRequest.set("properties", properties);
         
-        String path = folderPath + "/" + fileName;
+        String url = API_BASE + "/*";
         
         try {
-            JsonNode response = client.upload("/api/assets" + path, data, mimeType);
-            return parseAsset(response);
+            JsonNode response = client.post(url, folderRequest);
+            return parseFolder(response);
         } catch (Exception e) {
-            throw new IOException("Failed to upload asset: " + e.getMessage(), e);
+            throw new IOException("Failed to create folder: " + e.getMessage(), e);
         }
     }
 
-    public Asset uploadFile(String folderPath, Path filePath) throws IOException {
-        String fileName = filePath.getFileName().toString();
-        byte[] data = Files.readAllBytes(filePath);
-        
-        String mimeType = Files.probeContentType(filePath);
-        if (mimeType == null) {
-            mimeType = "application/octet-stream";
-        }
-        
-        return upload(folderPath, fileName, data, mimeType);
+    public boolean deleteFolder(String path) throws IOException {
+        String apiPath = normalizePath(path);
+        return client.delete(API_BASE + apiPath);
+    }
+
+    public boolean deleteAsset(String path) throws IOException {
+        String apiPath = normalizePath(path);
+        return client.delete(API_BASE + apiPath);
     }
 
     public boolean delete(String path) throws IOException {
-        return client.delete("/api/assets" + path);
+        return deleteAsset(path);
+    }
+
+    public Asset updateMetadata(String path, JsonNode metadata) throws IOException {
+        String apiPath = normalizePath(path);
+        ObjectNode request = mapper.createObjectNode();
+        request.put("class", "asset");
+        request.set("properties", metadata);
+        
+        JsonNode response = client.put(API_BASE + apiPath + ".json", request);
+        return parseAsset(response);
     }
 
     public JsonNode move(String sourcePath, String destPath) throws IOException {
-        ObjectNode moveRequest = mapper.createObjectNode();
-        moveRequest.put("dest", destPath);
-        moveRequest.put("replace", true);
+        String sourceApiPath = normalizePath(sourcePath);
+        String destApiPath = normalizePath(destPath);
         
-        return client.post("/api/assets" + sourcePath + ".move.json", moveRequest);
+        return client.move(API_BASE + sourceApiPath, API_BASE + destApiPath);
     }
 
     public JsonNode copy(String sourcePath, String destPath) throws IOException {
-        ObjectNode copyRequest = mapper.createObjectNode();
-        copyRequest.put("dest", destPath);
+        String sourceApiPath = normalizePath(sourcePath);
+        String destApiPath = normalizePath(destPath);
         
-        return client.post("/api/assets" + sourcePath + ".copy.json", copyRequest);
-    }
-
-    public byte[] download(String path) throws IOException {
-        return client.download("/api/assets" + path + "?format=original");
-    }
-
-    public JsonNode updateMetadata(String path, JsonNode metadata) throws IOException {
-        return client.post("/api/assets" + path + ".json", metadata);
+        return client.copy(API_BASE + sourceApiPath, API_BASE + destApiPath);
     }
 
     public List<Asset> search(String query, int limit) throws IOException {
         ObjectNode searchRequest = mapper.createObjectNode();
         searchRequest.put("text", query);
-        searchRequest.put("type", "dam:Asset");
         
-        JsonNode response = client.post("/bin/cq/search.json", searchRequest);
+        JsonNode response = client.post("/graphql/execute.json/aem/search-assets", searchRequest);
         List<Asset> assets = new ArrayList<>();
         
-        if (response.has("hits")) {
-            ArrayNode hits = (ArrayNode) response.get("hits");
-            for (JsonNode hit : hits) {
-                assets.add(parseAsset(hit));
+        if (response.has("data") && response.get("data").has("assetSearch")) {
+            JsonNode results = response.get("data").get("assetSearch");
+            if (results.isArray()) {
+                for (JsonNode node : results) {
+                    assets.add(parseAsset(node));
+                }
             }
         }
         
         return assets;
     }
 
+    public JsonNode createRendition(String assetPath, String renditionName, byte[] data, String mimeType) throws IOException {
+        String apiPath = normalizePath(assetPath);
+        String url = API_BASE + apiPath + "/renditions/" + renditionName;
+        
+        return client.upload(url, data, mimeType);
+    }
+
+    public JsonNode addComment(String assetPath, String message) throws IOException {
+        String apiPath = normalizePath(assetPath);
+        ObjectNode commentRequest = mapper.createObjectNode();
+        commentRequest.put("message", message);
+        
+        return client.post(API_BASE + apiPath + "/comments", commentRequest);
+    }
+
+    private String normalizePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return "";
+        }
+        if (path.startsWith("/api/assets")) {
+            return path.replace("/api/assets", "");
+        }
+        if (path.startsWith("/content/dam")) {
+            return path.replace("/content/dam", "");
+        }
+        if (path.startsWith("content/dam")) {
+            return "/" + path.replace("content/dam", "");
+        }
+        return path;
+    }
+
     private Asset parseAsset(JsonNode node) {
         Asset asset = new Asset();
-        asset.setPath(node.path("path").asText());
-        asset.setName(node.path("name").asText());
-        asset.setTitle(node.path("title").asText(node.path("jcr:title").asText()));
-        asset.setMimeType(node.path("mimeType").asText());
-        asset.setSize(node.path("size").asLong(0));
-        asset.setCreated(node.path("created").asText(node.path("jcr:created").asText()));
-        asset.setModified(node.path("modified").asText(node.path("jcr:lastModified").asText()));
+        
+        if (node.has("links")) {
+            for (JsonNode link : node.get("links")) {
+                if ("self".equals(link.path("rel").asText())) {
+                    String href = link.path("href").asText();
+                    asset.setPath(href);
+                }
+            }
+        }
+        
+        if (node.has("properties")) {
+            JsonNode props = node.get("properties");
+            asset.setName(props.path("name").asText());
+            asset.setTitle(props.path("dc:title").asText(props.path("name").asText()));
+            asset.setMimeType(props.path("dc:format").asText());
+            asset.setDescription(props.path("dc:description").asText());
+            asset.setCreated(props.path("jcr:created").asText());
+            asset.setModified(props.path("jcr:lastModified").asText());
+        }
+        
+        if (asset.getName().isEmpty()) {
+            asset.setName(node.path("name").asText());
+        }
+        
         return asset;
+    }
+
+    private Folder parseFolder(JsonNode node) {
+        Folder folder = new Folder();
+        
+        if (node.has("links")) {
+            for (JsonNode link : node.get("links")) {
+                if ("self".equals(link.path("rel").asText())) {
+                    folder.setPath(link.path("href").asText());
+                }
+            }
+        }
+        
+        if (node.has("properties")) {
+            JsonNode props = node.get("properties");
+            folder.setName(props.path("name").asText());
+            folder.setTitle(props.path("dc:title").asText(props.path("name").asText()));
+        }
+        
+        if (folder.getName().isEmpty()) {
+            folder.setName(node.path("name").asText());
+        }
+        
+        return folder;
     }
 
     public static class Asset {
@@ -138,6 +239,7 @@ public class AssetsApi {
         private String name;
         private String title;
         private String mimeType;
+        private String description;
         private long size;
         private String created;
         private String modified;
@@ -150,6 +252,8 @@ public class AssetsApi {
         public void setTitle(String title) { this.title = title; }
         public String getMimeType() { return mimeType; }
         public void setMimeType(String mimeType) { this.mimeType = mimeType; }
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
         public long getSize() { return size; }
         public void setSize(long size) { this.size = size; }
         public String getCreated() { return created; }
@@ -159,14 +263,25 @@ public class AssetsApi {
 
         @Override
         public String toString() {
-            return String.format("%s - %s (%s, %s)", name, title, mimeType, formatSize(size));
+            return String.format("%s - %s (%s)", name, title, mimeType);
         }
+    }
 
-        private String formatSize(long size) {
-            if (size < 1024) return size + " B";
-            if (size < 1024 * 1024) return String.format("%.1f KB", size / 1024.0);
-            if (size < 1024 * 1024 * 1024) return String.format("%.1f MB", size / (1024.0 * 1024));
-            return String.format("%.1f GB", size / (1024.0 * 1024 * 1024));
+    public static class Folder {
+        private String path;
+        private String name;
+        private String title;
+
+        public String getPath() { return path; }
+        public void setPath(String path) { this.path = path; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+
+        @Override
+        public String toString() {
+            return name + " (" + title + ")";
         }
     }
 }

@@ -11,6 +11,9 @@ import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.http.message.BasicClassicHttpRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -183,6 +186,82 @@ public class AemApiClient {
         HttpPost request = new HttpPost(buildUrl(path));
         request.setEntity(new StringEntity(new String(data), ContentType.create(contentType)));
         return execute(request);
+    }
+
+    public JsonNode move(String sourcePath, String destPath) throws IOException {
+        BasicClassicHttpRequest request = new BasicClassicHttpRequest("MOVE", buildUrl(sourcePath));
+        request.setHeader("X-Destination", destPath);
+        request.setHeader("X-Overwrite", "T");
+        request.setHeader("X-Depth", "infinity");
+        return executeDirect(request);
+    }
+
+    public JsonNode copy(String sourcePath, String destPath) throws IOException {
+        BasicClassicHttpRequest request = new BasicClassicHttpRequest("COPY", buildUrl(sourcePath));
+        request.setHeader("X-Destination", destPath);
+        request.setHeader("X-Overwrite", "T");
+        request.setHeader("X-Depth", "infinity");
+        return executeDirect(request);
+    }
+
+    private JsonNode executeDirect(BasicClassicHttpRequest request) throws IOException {
+        String token = configManager.getActiveAccessToken();
+        String basicAuth = configManager.getActiveBasicAuth();
+        
+        if (basicAuth != null && !basicAuth.isEmpty()) {
+            request.setHeader("Authorization", "Basic " + basicAuth);
+        } else if (token != null && !token.isEmpty()) {
+            request.setHeader("Authorization", "Bearer " + token);
+        }
+        request.setHeader("Accept", "application/json");
+
+        String path;
+        String method = request.getMethod();
+
+        try {
+            path = request.getUri().toString();
+        } catch (Exception e) {
+            path = "(URI unavailable)";
+        }
+
+        if (debugMode) {
+            try {
+                logger.info("Request: {} {}", method, request.getUri());
+            } catch (Exception e) {
+                logger.info("Request: {} (URI unavailable)", method);
+            }
+        }
+
+        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            String responseBody;
+            try {
+                responseBody = EntityUtils.toString(response.getEntity());
+            } catch (Exception e) {
+                responseBody = "";
+            }
+            
+            int statusCode = response.getCode();
+            logAudit(method, path, statusCode);
+
+            if (debugMode) {
+                logger.info("Response: {} - {}", statusCode, responseBody.substring(0, Math.min(200, responseBody.length())));
+            }
+
+            if (statusCode >= 200 && statusCode < 300) {
+                if (responseBody.isEmpty()) {
+                    return objectMapper.createObjectNode();
+                }
+                return objectMapper.readTree(responseBody);
+            } else if (statusCode == 404) {
+                throw new IOException("Not found: " + path);
+            } else if (statusCode == 401) {
+                throw new IOException("Unauthorized: " + path);
+            } else if (statusCode == 409) {
+                throw new IOException("Conflict: " + path);
+            } else {
+                throw new IOException("HTTP " + statusCode + ": " + responseBody);
+            }
+        }
     }
 
     private JsonNode execute(HttpUriRequestBase request) throws IOException {
