@@ -77,7 +77,17 @@ public class AssetsApi {
         if (response.has("entities")) {
             ArrayNode entities = (ArrayNode) response.get("entities");
             for (JsonNode entity : entities) {
-                if (entity.has("class") && "assetFolder".equals(entity.get("class").asText())) {
+                String className = "";
+                JsonNode classNode = entity.get("class");
+                if (classNode != null) {
+                    if (classNode.isArray()) {
+                        className = classNode.elements().hasNext() ? classNode.elements().next().asText() : "";
+                    } else {
+                        className = classNode.asText();
+                    }
+                }
+                
+                if (className.contains("folder")) {
                     folders.add(parseFolder(entity));
                 }
             }
@@ -94,12 +104,14 @@ public class AssetsApi {
 
     public Folder createFolder(String parentPath, String folderName, String title) throws IOException {
         ObjectNode folderRequest = mapper.createObjectNode();
-        folderRequest.put("class", "assetFolder");
+        folderRequest.put("name", folderName);
+        
         ObjectNode properties = mapper.createObjectNode();
         properties.put("title", title != null ? title : folderName);
         folderRequest.set("properties", properties);
         
-        String url = API_BASE + "/*";
+        String apiPath = normalizePath(parentPath);
+        String url = API_BASE + (apiPath.isEmpty() ? "" : apiPath) + "/*";
         
         try {
             JsonNode response = client.post(url, folderRequest);
@@ -112,6 +124,38 @@ public class AssetsApi {
     public boolean deleteFolder(String path) throws IOException {
         String apiPath = normalizePath(path);
         return client.delete(API_BASE + apiPath);
+    }
+
+    public Asset upload(String folderPath, String fileName, byte[] data, String mimeType) throws IOException {
+        String apiPath = normalizePath(folderPath);
+        ObjectNode request = mapper.createObjectNode();
+        request.put("class", "asset");
+        
+        ObjectNode properties = mapper.createObjectNode();
+        properties.put("name", fileName);
+        properties.put("dc:title", fileName);
+        request.set("properties", properties);
+        
+        String url = API_BASE + apiPath + "/" + fileName;
+        
+        try {
+            JsonNode response = client.upload(url, data, "application/octet-stream");
+            return parseAsset(response);
+        } catch (Exception e) {
+            throw new IOException("Failed to upload asset: " + e.getMessage(), e);
+        }
+    }
+
+    public Asset uploadFile(String folderPath, java.nio.file.Path filePath) throws IOException {
+        String fileName = filePath.getFileName().toString();
+        byte[] data = java.nio.file.Files.readAllBytes(filePath);
+        
+        String mimeType = java.nio.file.Files.probeContentType(filePath);
+        if (mimeType == null) {
+            mimeType = "application/octet-stream";
+        }
+        
+        return upload(folderPath, fileName, data, mimeType);
     }
 
     public boolean deleteAsset(String path) throws IOException {

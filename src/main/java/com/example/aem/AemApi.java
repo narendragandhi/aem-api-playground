@@ -319,9 +319,35 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Uploading: " + filePath + " to " + folderPath);
-                System.out.println("(Demo mode - API client not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+                    if (!java.nio.file.Files.exists(path)) {
+                        System.out.println("File not found: " + filePath);
+                        return 1;
+                    }
+
+                    AemApiClient client = new AemApiClient();
+                    AssetsApi api = new AssetsApi(client);
+                    
+                    System.out.println("Uploading: " + filePath + " to " + folderPath);
+                    AssetsApi.Asset asset = api.uploadFile(folderPath, path);
+                    
+                    System.out.println("\nUpload successful!");
+                    System.out.println("  Path: " + asset.getPath());
+                    System.out.println("  Name: " + asset.getName());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
 
@@ -332,9 +358,31 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Deleting asset: " + path);
-                System.out.println("(Demo mode - API client not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    AssetsApi api = new AssetsApi(client);
+                    
+                    System.out.println("Deleting: " + path);
+                    boolean result = api.delete(path);
+                    
+                    if (result) {
+                        System.out.println("\nDelete successful!");
+                    } else {
+                        System.out.println("\nDelete failed!");
+                    }
+                    return result ? 0 : 1;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
     }
@@ -680,11 +728,32 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Creating folder: " + name);
-                System.out.println("Parent: " + parentPath);
-                System.out.println("Title: " + (title != null ? title : name));
-                System.out.println("(Folder creation not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    AssetsApi api = new AssetsApi(client);
+                    
+                    System.out.println("Creating folder: " + name);
+                    System.out.println("Parent: " + parentPath);
+                    System.out.println("Title: " + (title != null ? title : name));
+                    
+                    AssetsApi.Folder folder = api.createFolder(parentPath, name, title);
+                    
+                    System.out.println("\nFolder created!");
+                    System.out.println("  Name: " + folder.getName());
+                    System.out.println("  Title: " + folder.getTitle());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
 
@@ -698,12 +767,31 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Deleting folder: " + path);
-                if (force) {
-                    System.out.println("Force: enabled");
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
                 }
-                System.out.println("(Folder deletion not fully implemented)");
-                return 0;
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    AssetsApi api = new AssetsApi(client);
+                    
+                    System.out.println("Deleting folder: " + path);
+                    boolean result = api.deleteFolder(path);
+                    
+                    if (result) {
+                        System.out.println("\nFolder deleted!");
+                    } else {
+                        System.out.println("\nDelete failed!");
+                    }
+                    return result ? 0 : 1;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
 
@@ -714,9 +802,30 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Listing folders in: " + path);
-                System.out.println("(Folder listing not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    AssetsApi api = new AssetsApi(client);
+                    
+                    List<AssetsApi.Folder> folders = api.listFolders(path);
+                    
+                    System.out.println("\nFolders in " + path + ":\n");
+                    for (AssetsApi.Folder folder : folders) {
+                        System.out.println("  " + folder.getName() + " - " + folder.getTitle());
+                    }
+                    System.out.println("\nTotal: " + folders.size());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
     }
