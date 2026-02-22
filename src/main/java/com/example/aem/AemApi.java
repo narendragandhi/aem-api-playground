@@ -1195,8 +1195,11 @@ public class AemApi implements Callable<Integer> {
         @Option(names = {"--api-key"}, description = "OpenAI API key (or set OPENAI_API_KEY env)")
         private String apiKey;
 
-        @Option(names = {"--model"}, description = "OpenAI model", defaultValue = "gpt-4")
+        @Option(names = {"--model"}, description = "OpenAI/Ollama model", defaultValue = "gpt-4")
         private String model;
+
+        @Option(names = {"--provider"}, description = "AI provider: openai or ollama", defaultValue = "openai")
+        private String provider;
 
         @Option(names = {"--clear"}, description = "Clear conversation history")
         private boolean clear;
@@ -1258,7 +1261,12 @@ public class AemApi implements Callable<Integer> {
 
             String key = apiKey != null ? apiKey : AemAgent.getApiKey();
             
-            if (key == null || key.isEmpty()) {
+            String normalizedProvider = provider != null ? provider.toLowerCase().trim() : "openai";
+            boolean isOllama = normalizedProvider.equals("ollama");
+            
+            if (isOllama) {
+                key = System.getenv("OLLAMA_API_KEY");
+            } else if (key == null || key.isEmpty()) {
                 System.out.println("Error: OpenAI API key required.");
                 System.out.println("Set OPENAI_API_KEY environment variable or use --api-key");
                 return 1;
@@ -1271,7 +1279,8 @@ public class AemApi implements Callable<Integer> {
             }
 
             if (agent == null || clear || saveSession != null || loadSession != null || listSessions || deleteSession != null || stats) {
-                agent = new AemAgent(key, model);
+                AemAgent.LlmProvider llmProvider = isOllama ? AemAgent.LlmProvider.OLLAMA : AemAgent.LlmProvider.OPENAI;
+                agent = new AemAgent(key, model, llmProvider);
             }
 
             agent.setCacheEnabled(!noCache);

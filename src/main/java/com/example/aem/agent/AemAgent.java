@@ -75,6 +75,25 @@ public class AemAgent {
         this(apiKey, model, (AemApiClient) null);
     }
 
+    public AemAgent(String apiKey, String model, LlmProvider provider) {
+        this.apiKey = apiKey;
+        this.model = model != null ? model : "llama2";
+        this.provider = provider != null ? provider : detectProvider(apiKey);
+        this.apiClient = new AemApiClient();
+        this.objectMapper = new ObjectMapper();
+        
+        if (useMemory) {
+            try {
+                memory = new AgentMemory();
+                List<Map<String, String>> savedHistory = memory.loadHistory();
+                conversationHistory.addAll(savedHistory);
+            } catch (IOException e) {
+                System.err.println("Warning: Memory initialization failed, using in-memory only: " + e.getMessage());
+                memory = null;
+            }
+        }
+    }
+
     private LlmProvider detectProvider(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) {
             return LlmProvider.OLLAMA;
