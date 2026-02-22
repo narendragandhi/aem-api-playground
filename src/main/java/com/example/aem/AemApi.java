@@ -5,8 +5,11 @@ import com.example.aem.agent.AgentMemory;
 import com.example.aem.client.AemApiClient;
 import com.example.aem.config.ConfigManager;
 import com.example.aem.api.AssetsApi;
+import com.example.aem.api.ContentFragmentApi;
 import com.example.aem.security.InputValidator;
 import com.example.aem.shell.InteractiveShell;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -199,18 +202,28 @@ public class AemApi implements Callable<Integer> {
             public Integer call() throws Exception {
                 ConfigManager config = ConfigManager.getInstance();
                 String baseUrl = config.getActiveEnvironmentUrl();
-                String token = config.getActiveAccessToken();
                 
                 if (baseUrl == null || baseUrl.isEmpty()) {
-                    System.out.println("Not connected. Run 'connect --env <env> --url <url> --access-token <token>' first.");
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
                     return 1;
                 }
 
-                String apiUrl = baseUrl + "/api/content/fragments" + path + ".1.json";
-                System.out.println("Fetching content fragments from: " + apiUrl);
-                System.out.println("Path: " + path + ", Max: " + max + ", Format: " + format);
-                System.out.println("\n(Demo mode - API client not fully implemented)");
-                return 0;
+                try {
+                    AemApiClient client = new AemApiClient();
+                    ContentFragmentApi api = new ContentFragmentApi(client);
+                    
+                    List<ContentFragmentApi.ContentFragment> fragments = api.list(path, max);
+                    
+                    System.out.println("\nContent Fragments in " + path + ":\n");
+                    for (ContentFragmentApi.ContentFragment cf : fragments) {
+                        System.out.println("  " + cf.getName() + " - " + cf.getTitle());
+                    }
+                    System.out.println("\nTotal: " + fragments.size());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
 
@@ -221,9 +234,31 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Getting content fragment: " + path);
-                System.out.println("(Demo mode - API client not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    ContentFragmentApi api = new ContentFragmentApi(client);
+                    
+                    ContentFragmentApi.ContentFragment cf = api.get(path);
+                    
+                    System.out.println("\nContent Fragment:");
+                    System.out.println("  Name: " + cf.getName());
+                    System.out.println("  Title: " + cf.getTitle());
+                    System.out.println("  Model: " + cf.getModel());
+                    System.out.println("  Path: " + cf.getPath());
+                    System.out.println("  Description: " + cf.getDescription());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
 
@@ -243,10 +278,28 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Creating content fragment: " + name);
-                System.out.println("Parent: " + parentPath + ", Model: " + model + ", Title: " + title);
-                System.out.println("(Demo mode - API client not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect --env <env> --url <url>' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    ContentFragmentApi api = new ContentFragmentApi(client);
+                    
+                    ContentFragmentApi.ContentFragment cf = api.create(parentPath, name, model, title);
+                    
+                    System.out.println("\nContent Fragment created!");
+                    System.out.println("  Name: " + cf.getName());
+                    System.out.println("  Title: " + cf.getTitle());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
     }
@@ -540,19 +593,29 @@ public class AemApi implements Callable<Integer> {
                 ConfigManager config = ConfigManager.getInstance();
                 String baseUrl = config.getActiveEnvironmentUrl();
                 
-                if (baseUrl == null) {
+                if (baseUrl == null || baseUrl.isEmpty()) {
                     System.out.println("Not connected. Run 'connect' first.");
                     return 1;
                 }
 
-                String endpoint = baseUrl + "/graphql/execute.json";
-                System.out.println("Executing GraphQL query on: " + endpoint);
-                System.out.println("Query: " + query);
-                if (variables != null) {
-                    System.out.println("Variables: " + variables);
+                try {
+                    AemApiClient client = new AemApiClient();
+                    
+                    ObjectNode request = client.getObjectMapper().createObjectNode();
+                    request.put("query", query);
+                    if (variables != null) {
+                        request.set("variables", client.getObjectMapper().readTree(variables));
+                    }
+                    
+                    JsonNode response = client.post("/graphql/execute.json", request);
+                    
+                    System.out.println("\nGraphQL Response:");
+                    System.out.println(response.toString());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
                 }
-                System.out.println("(GraphQL execution not fully implemented)");
-                return 0;
             }
         }
 
@@ -566,12 +629,32 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Executing persisted query: " + name);
-                if (variables != null) {
-                    System.out.println("Variables: " + variables);
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect' first.");
+                    return 1;
                 }
-                System.out.println("(Persisted query execution not fully implemented)");
-                return 0;
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    
+                    String endpoint = "/graphql/execute.json/" + name;
+                    ObjectNode request = client.getObjectMapper().createObjectNode();
+                    if (variables != null) {
+                        request.set("variables", client.getObjectMapper().readTree(variables));
+                    }
+                    
+                    JsonNode response = client.post(endpoint, request);
+                    
+                    System.out.println("\nPersisted Query Response:");
+                    System.out.println(response.toString());
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
 
@@ -582,9 +665,31 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
-                System.out.println("Listing persisted queries in: " + path);
-                System.out.println("(List not fully implemented)");
-                return 0;
+                ConfigManager config = ConfigManager.getInstance();
+                String baseUrl = config.getActiveEnvironmentUrl();
+                
+                if (baseUrl == null || baseUrl.isEmpty()) {
+                    System.out.println("Not connected. Run 'connect' first.");
+                    return 1;
+                }
+
+                try {
+                    AemApiClient client = new AemApiClient();
+                    JsonNode response = client.get(path + ".1.json");
+                    
+                    System.out.println("\nPersisted Queries:");
+                    if (response.has("hits")) {
+                        response.get("hits").forEach(hit -> {
+                            System.out.println("  - " + hit.path("name").asText());
+                        });
+                    } else {
+                        System.out.println("  (none found)");
+                    }
+                    return 0;
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                    return 1;
+                }
             }
         }
     }
