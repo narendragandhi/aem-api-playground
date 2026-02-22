@@ -162,6 +162,50 @@ public class ConfigManager {
         return auth;
     }
 
+    public void setOAuthConfig(String env, String authUrl, String tokenUrl, String clientId, String clientSecret, String redirectUri) {
+        Map<String, String> envConfig = getOrCreateEnvironment(env);
+        envConfig.put("oauthAuthUrl", authUrl);
+        envConfig.put("oauthTokenUrl", tokenUrl);
+        envConfig.put("oauthClientId", clientId);
+        if (clientSecret != null) {
+            envConfig.put("oauthClientSecret", CredentialEncryption.encrypt(clientSecret));
+        }
+        if (redirectUri != null) {
+            envConfig.put("oauthRedirectUri", redirectUri);
+        }
+    }
+
+    public String getOAuthAuthorizationUrl() {
+        Map<String, String> env = environments.get(activeEnvironment);
+        return env != null ? env.get("oauthAuthUrl") : null;
+    }
+
+    public String getOAuthTokenUrl() {
+        Map<String, String> env = environments.get(activeEnvironment);
+        return env != null ? env.get("oauthTokenUrl") : null;
+    }
+
+    public String getOAuthClientId() {
+        Map<String, String> env = environments.get(activeEnvironment);
+        return env != null ? env.get("oauthClientId") : null;
+    }
+
+    public String getOAuthClientSecret() {
+        Map<String, String> env = environments.get(activeEnvironment);
+        if (env == null) return null;
+        String secret = env.get("oauthClientSecret");
+        if (secret == null) return null;
+        if (CredentialEncryption.isEncrypted(secret)) {
+            return CredentialEncryption.decrypt(secret);
+        }
+        return secret;
+    }
+
+    public String getOAuthRedirectUri() {
+        Map<String, String> env = environments.get(activeEnvironment);
+        return env != null ? env.get("oauthRedirectUri") : "http://localhost:8080/callback";
+    }
+
     private Map<String, String> getOrCreateEnvironment(String env) {
         return environments.computeIfAbsent(env, k -> new HashMap<>());
     }
