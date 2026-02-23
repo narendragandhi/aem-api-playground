@@ -1,6 +1,7 @@
 package com.aemtools.aem.client;
 
 import com.aemtools.aem.config.ConfigManager;
+import com.aemtools.aem.config.LoggerManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.classic.methods.*;
@@ -14,13 +15,12 @@ import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.http.message.BasicClassicHttpRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -39,6 +39,9 @@ public class AemApiClient {
     private boolean enforceHttps = false;
     private boolean cacheEnabled = true;
     private final Map<String, String> auditLog = new ConcurrentHashMap<>();
+    private String httpProxy;
+    private String httpsProxy;
+    private String noProxy;
     
     private final Map<String, CacheEntry> responseCache = new LinkedHashMap<>(16, 0.75f, true) {
         @Override
@@ -49,15 +52,49 @@ public class AemApiClient {
     private long cacheTtlMs = DEFAULT_CACHE_TTL_MS;
 
     public AemApiClient() {
+        this(null, null, null);
+    }
+
+    public AemApiClient(String httpProxy, String httpsProxy, String noProxy) {
+        this.httpProxy = httpProxy;
+        this.httpsProxy = httpsProxy;
+        this.noProxy = noProxy;
+        
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
         cm.setMaxTotal(10);
         cm.setDefaultMaxPerRoute(5);
-        this.httpClient = HttpClients.custom()
-            .setConnectionManager(cm)
-            .build();
+        
+        var builder = HttpClients.custom()
+            .setConnectionManager(cm);
+        
+        if (httpProxy != null && !httpProxy.isEmpty()) {
+            logger.info("Proxy configured: http={}, https={}, no-proxy={}", httpProxy, httpsProxy, noProxy);
+        }
+        
+        this.httpClient = builder.build();
         this.objectMapper = new ObjectMapper();
         this.configManager = ConfigManager.getInstance();
         this.debugMode = configManager.isDebugEnabled();
+    }
+
+    public void setProxy(String httpProxy, String httpsProxy, String noProxy) {
+        this.httpProxy = httpProxy;
+        this.httpsProxy = httpsProxy;
+        this.noProxy = noProxy;
+        logger.info("Proxy settings updated: http={}, https={}, no-proxy={}", httpProxy, httpsProxy, noProxy);
+    }
+
+    private boolean shouldBypassProxy(String host) {
+        if (noProxy == null || noProxy.isEmpty()) {
+            return false;
+        }
+        for (String noProxyHost : noProxy.split(",")) {
+            String trim = noProxyHost.trim();
+            if (host.equals(trim) || host.endsWith("." + trim) || "localhost".equals(trim) && host.startsWith("localhost")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void setDebugMode(boolean debugMode) {

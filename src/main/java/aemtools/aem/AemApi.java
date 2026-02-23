@@ -4,6 +4,7 @@ import com.aemtools.aem.agent.AemAgent;
 import com.aemtools.aem.agent.AgentMemory;
 import com.aemtools.aem.client.AemApiClient;
 import com.aemtools.aem.config.ConfigManager;
+import com.aemtools.aem.config.LoggerManager;
 import com.aemtools.aem.api.AssetsApi;
 import com.aemtools.aem.api.ContentFragmentApi;
 import com.aemtools.aem.security.InputValidator;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
     description = "AEM API Playground - Interactive CLI for testing Adobe Experience Manager APIs",
     mixinStandardHelpOptions = true,
     version = "1.0.0",
+    sortSynopsis = false,
     subcommands = {
         AemApi.ShellCommand.class,
         AemApi.ConnectCommand.class,
@@ -57,6 +59,38 @@ public class AemApi implements Callable<Integer> {
     @Option(names = {"--debug"}, description = "Enable debug mode (show HTTP requests/responses)")
     private boolean debug;
 
+    @Option(names = {"--log-level", "--logLevel"}, 
+            description = "Log level: silly, debug, verbose, info, warn, error",
+            defaultValue = "info",
+            order = 0)
+    private String logLevel;
+
+    @Option(names = {"--log-file", "--logFile"}, 
+            description = "Log file path (use '-' for stdout, empty for no file)",
+            defaultValue = "-",
+            order = 1)
+    private String logFile;
+
+    @Option(names = {"--http-proxy", "--proxy"}, 
+            description = "HTTP proxy URL (e.g., http://proxy:8080)",
+            order = 2)
+    private String httpProxy;
+
+    @Option(names = {"--https-proxy", "--httpsProxy"}, 
+            description = "HTTPS proxy URL",
+            order = 3)
+    private String httpsProxy;
+
+    @Option(names = {"--no-proxy", "--noProxy"}, 
+            description = "Comma-separated list of hosts to bypass proxy",
+            order = 4)
+    private String noProxy;
+
+    @Option(names = {"--env-file"}, 
+            description = "Path to .env file (default: .env in current directory)",
+            order = 5)
+    private String envFile;
+
     public static void main(String[] args) {
         int exitCode = new CommandLine(new AemApi())
             .setCaseInsensitiveEnumValuesAllowed(true)
@@ -66,7 +100,23 @@ public class AemApi implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        LoggerManager loggerMgr = LoggerManager.getInstance();
+        
+        if (envFile != null && !envFile.isEmpty()) {
+            java.nio.file.Path p = java.nio.file.Paths.get(envFile);
+            if (java.nio.file.Files.exists(p)) {
+                loggerMgr.loadEnvFile(p.getParent() != null ? p.getParent().toString() : ".");
+            }
+        } else {
+            loggerMgr.loadEnvFile(".");
+        }
+
+        String effectiveLogLevel = loggerMgr.getEnv("AEM_LOG_LEVEL", logLevel);
+        String effectiveLogFile = loggerMgr.getEnv("AEM_LOG_FILE", logFile);
+        loggerMgr.configureLogging(effectiveLogLevel, effectiveLogFile);
+
         System.out.println("AEM API Playground v1.0.0");
+        System.out.println("Log level: " + effectiveLogLevel);
         System.out.println("Type 'shell' to enter interactive mode or use subcommands.");
         System.out.println("Type 'help' for available commands.");
         return 0;
