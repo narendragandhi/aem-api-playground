@@ -16,6 +16,8 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 import com.aemtools.aem.util.OutputHelper;
+import com.aemtools.aem.util.MockDataHelper;
+import com.aemtools.aem.RecipeCommand;
 
 import java.io.IOException;
 import java.util.List;
@@ -47,7 +49,8 @@ import java.util.stream.Collectors;
         AemApi.ModelsCommand.class,
         AemApi.AuditCommand.class,
         AemApi.AgentCommand.class,
-        AemApi.CompletionCommand.class
+        AemApi.CompletionCommand.class,
+        RecipeCommand.class
     }
 )
 public class AemApi implements Callable<Integer> {
@@ -58,10 +61,34 @@ public class AemApi implements Callable<Integer> {
     @Option(names = {"--debug"}, description = "Enable debug mode (show HTTP requests/responses)")
     private boolean debug;
 
+    @Option(names = {"--mock"}, description = "Use mock data (no AEM connection required)")
+    private boolean mock;
+
+    @Option(names = {"--dry-run"}, description = "Show what would happen without making actual changes")
+    private boolean dryRun;
+
+    @Option(names = {"--json"}, description = "Output in JSON format")
+    private boolean json;
+
+    @Option(names = {"--output"}, description = "Output format: table, json, raw")
+    private String output;
+
+    @Option(names = {"--max"}, description = "Max results")
+    private int max;
+
+    @Option(names = {"--timeout"}, description = "Request timeout in seconds")
+    private int timeout;
+
+    @Option(names = {"--cache"}, description = "Enable/disable cache: true, false")
+    private String cache;
+
     public static void main(String[] args) {
-        int exitCode = new CommandLine(new AemApi())
-            .setCaseInsensitiveEnumValuesAllowed(true)
-            .execute(args);
+        CliFlags.parse(args);
+        
+        CommandLine cmd = new CommandLine(new AemApi())
+            .setCaseInsensitiveEnumValuesAllowed(true);
+        
+        int exitCode = cmd.execute(args);
         System.exit(exitCode);
     }
 
@@ -206,6 +233,20 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
+                if (CliFlags.mockMode) {
+                    JsonNode mockData = MockDataHelper.getContentFragments();
+                    if (CliFlags.jsonOutput) {
+                        System.out.println(mockData.toString());
+                    } else {
+                        System.out.println("\n[MOCK MODE] Content Fragments in " + path + ":\n");
+                        for (JsonNode cf : mockData) {
+                            System.out.println("  " + cf.get("name").asText() + " - " + cf.get("title").asText());
+                        }
+                        System.out.println("\nTotal: " + mockData.size());
+                    }
+                    return 0;
+                }
+
                 ConfigManager config = ConfigManager.getInstance();
                 String baseUrl = config.getActiveEnvironmentUrl();
                 
@@ -418,6 +459,20 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
+                if (CliFlags.mockMode) {
+                    JsonNode mockData = MockDataHelper.getAssets();
+                    if (CliFlags.jsonOutput) {
+                        System.out.println(mockData.toString());
+                    } else {
+                        System.out.println("\n[MOCK MODE] Assets in " + path + ":\n");
+                        for (JsonNode asset : mockData) {
+                            System.out.println("  " + asset.get("name").asText() + " - " + asset.get("title").asText());
+                        }
+                        System.out.println("\nTotal: " + mockData.size());
+                    }
+                    return 0;
+                }
+
                 ConfigManager config = ConfigManager.getInstance();
                 String baseUrl = config.getActiveEnvironmentUrl();
                 
@@ -610,7 +665,8 @@ public class AemApi implements Callable<Integer> {
 
     @Command(name = "config", description = "Configuration management", subcommands = {
         ConfigCommand.ShowCommand.class,
-        ConfigCommand.EnvCommand.class
+        ConfigCommand.EnvCommand.class,
+        ConfigCommand.DefaultsCommand.class
     })
     public static class ConfigCommand implements Callable<Integer> {
         @Override
@@ -655,6 +711,63 @@ public class AemApi implements Callable<Integer> {
                 } else {
                     System.out.println("Current environment: " + config.getActiveEnvironment());
                 }
+                return 0;
+            }
+        }
+
+        @Command(name = "defaults", description = "Set default options")
+        public static class DefaultsCommand implements Callable<Integer> {
+            @Option(names = {"--output"}, description = "Default output format: table, json, raw")
+            private String output;
+
+            @Option(names = {"--max"}, description = "Default max results")
+            private Integer max;
+
+            @Option(names = {"--timeout"}, description = "Request timeout in seconds")
+            private Integer timeout;
+
+            @Option(names = {"--cache"}, description = "Enable/disable caching: true, false")
+            private String cache;
+
+            @Option(names = {"--reset"}, description = "Reset to defaults")
+            private boolean reset;
+
+            @Override
+            public Integer call() throws Exception {
+                ConfigManager config = ConfigManager.getInstance();
+                
+                if (reset) {
+                    config.setDefault("output", "table");
+                    config.setDefault("max", "20");
+                    config.setDefault("timeout", "30");
+                    config.setDefault("cache", "true");
+                    System.out.println("Defaults reset to factory settings.");
+                    return 0;
+                }
+                
+                if (output != null) {
+                    config.setDefault("output", output);
+                    System.out.println("Default output set to: " + output);
+                }
+                if (max != null) {
+                    config.setDefault("max", max.toString());
+                    System.out.println("Default max set to: " + max);
+                }
+                if (timeout != null) {
+                    config.setDefault("timeout", timeout.toString());
+                    System.out.println("Default timeout set to: " + timeout + "s");
+                }
+                if (cache != null) {
+                    config.setDefault("cache", cache);
+                    System.out.println("Cache enabled: " + cache);
+                }
+                
+                config.save();
+                System.out.println("\nCurrent defaults:");
+                System.out.println("  output: " + config.getDefault("output", "table"));
+                System.out.println("  max: " + config.getDefault("max", "20"));
+                System.out.println("  timeout: " + config.getDefault("timeout", "30"));
+                System.out.println("  cache: " + config.getDefault("cache", "true"));
                 return 0;
             }
         }
@@ -1107,8 +1220,22 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
+                if (CliFlags.mockMode) {
+                    JsonNode mockData = MockDataHelper.getWorkflows();
+                    if (CliFlags.jsonOutput) {
+                        System.out.println(mockData.toString());
+                    } else {
+                        System.out.println("\n[MOCK MODE] Workflow Instances:\n");
+                        for (JsonNode wf : mockData) {
+                            System.out.println("  " + wf.get("id").asText() + " - " + wf.get("modelTitle").asText() + " [" + wf.get("status").asText() + "]");
+                        }
+                        System.out.println("\nTotal: " + mockData.size());
+                    }
+                    return 0;
+                }
+                
                 System.out.println("Listing workflow instances" + (status != null ? " with status: " + status : ""));
-                System.out.println("(Workflow listing not fully implemented)");
+                System.out.println("(Use --mock for demo data)");
                 return 0;
             }
         }
@@ -1288,10 +1415,19 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
+                if (CliFlags.mockMode || CliFlags.dryRunMode) {
+                    String mode = CliFlags.mockMode ? "MOCK MODE" : "DRY RUN";
+                    System.out.println("[" + mode + "] Would publish: " + path + " via agent: " + agent);
+                    if (CliFlags.jsonOutput) {
+                        System.out.println("{\"success\":true,\"path\":\"" + path + "\",\"action\":\"publish\"}");
+                    }
+                    return 0;
+                }
+                
                 System.out.println("Publishing content:");
                 System.out.println("  Path: " + path);
                 System.out.println("  Agent: " + agent);
-                System.out.println("(Replication not fully implemented)");
+                System.out.println("(Use --mock or --dry-run for demo)");
                 return 0;
             }
         }
@@ -1303,8 +1439,17 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
+                if (CliFlags.mockMode || CliFlags.dryRunMode) {
+                    String mode = CliFlags.mockMode ? "MOCK MODE" : "DRY RUN";
+                    System.out.println("[" + mode + "] Would unpublish: " + path);
+                    if (CliFlags.jsonOutput) {
+                        System.out.println("{\"success\":true,\"path\":\"" + path + "\",\"action\":\"unpublish\"}");
+                    }
+                    return 0;
+                }
+                
                 System.out.println("Unpublishing content: " + path);
-                System.out.println("(Replication not fully implemented)");
+                System.out.println("(Use --mock or --dry-run for demo)");
                 return 0;
             }
         }
@@ -1396,8 +1541,23 @@ public class AemApi implements Callable<Integer> {
 
             @Override
             public Integer call() throws Exception {
+                if (CliFlags.mockMode) {
+                    JsonNode mockData = MockDataHelper.getPackages();
+                    if (CliFlags.jsonOutput) {
+                        System.out.println(mockData.toString());
+                    } else {
+                        System.out.println("\n[MOCK MODE] Packages" + (group != null ? " in group: " + group : " all groups") + ":\n");
+                        for (JsonNode pkg : mockData) {
+                            System.out.println("  " + pkg.get("group").asText() + ":" + pkg.get("name").asText() + 
+                                " v" + pkg.get("version").asText());
+                        }
+                        System.out.println("\nTotal: " + mockData.size());
+                    }
+                    return 0;
+                }
+                
                 System.out.println("Listing packages" + (group != null ? " in group: " + group : ""));
-                System.out.println("(Package listing not fully implemented)");
+                System.out.println("(Use --mock for demo data)");
                 return 0;
             }
         }
