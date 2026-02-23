@@ -4,3 +4,8 @@ target/
 .DS_Store
 *.log
 .aem-api/
+.env
+*.pem
+*.key
+*.crt
+credentials.json
