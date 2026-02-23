@@ -21,8 +21,10 @@ import com.aemtools.aem.util.MockDataHelper;
 import com.aemtools.aem.RecipeCommand;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.Scanner;
 import java.util.stream.Collectors;
 
 @Command(
@@ -218,7 +220,7 @@ public class AemApi implements Callable<Integer> {
             
             if (username != null && password != null) {
                 String encoded = java.util.Base64.getEncoder()
-                    .encodeToString((username + ":" + password).getBytes());
+                    .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
                 config.setBasicAuth(env, encoded);
                 System.out.println("Using basic auth for: " + env);
             }
@@ -231,7 +233,7 @@ public class AemApi implements Callable<Integer> {
                 }
                 if (username != null && password != null) {
                     String encoded = java.util.Base64.getEncoder()
-                        .encodeToString((username + ":" + password).getBytes());
+                        .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
                     config.setBasicAuth(env, encoded);
                 }
                 config.save();
@@ -245,7 +247,7 @@ public class AemApi implements Callable<Integer> {
                 config.setActiveEnvironment(env);
                 config.setEnvironmentUrl(env, url);
                 config.setBasicAuth(env, java.util.Base64.getEncoder()
-                    .encodeToString((username + ":" + password).getBytes()));
+                    .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8)));
                 System.out.println("Connected to " + env + " (" + url + ") with basic auth");
             } else {
                 config.setActiveEnvironment(env);
@@ -2012,7 +2014,7 @@ public class AemApi implements Callable<Integer> {
         private int runInteractive(AemAgent agent) {
             System.out.println("AEM AI Agent (type 'exit' to quit, 'clear' to reset)");
             System.out.println("=================================================");
-            java.util.Scanner scanner = new java.util.Scanner(System.in);
+            Scanner scanner = new Scanner(System.in, StandardCharsets.UTF_8);
             
             while (true) {
                 System.out.print("\nYou: ");

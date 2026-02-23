@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
@@ -119,8 +120,10 @@ public class OAuthManager {
         System.out.println("\nEnter the authorization code: ");
         
         try {
-            java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
-            return reader.readLine().trim();
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(System.in, StandardCharsets.UTF_8));
+            String line = reader.readLine();
+            return line != null ? line.trim() : null;
         } catch (IOException e) {
             logger.error("Failed to read authorization code", e);
             return null;

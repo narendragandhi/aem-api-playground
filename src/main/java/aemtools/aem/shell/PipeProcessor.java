@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 
 public class PipeProcessor {
 
@@ -229,7 +230,7 @@ public class PipeProcessor {
                     System.out.println("Usage: pipe export <filepath>");
                     return;
                 }
-                try (PrintWriter writer = new PrintWriter(new FileWriter(args[1]))) {
+                try (PrintWriter writer = new PrintWriter(new FileWriter(args[1], StandardCharsets.UTF_8))) {
                     for (Map<String, Object> item : context.previousResults) {
                         writer.println(item);
                     }

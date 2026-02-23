@@ -4,6 +4,7 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -12,13 +13,14 @@ public class CredentialEncryption {
     private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private static byte[] MASTER_KEY;
 
     static {
         String keyEnv = System.getProperty("AEM_API_MASTER_KEY");
         if (keyEnv != null && keyEnv.length() >= 32) {
-            MASTER_KEY = keyEnv.substring(0, 32).getBytes();
+            MASTER_KEY = keyEnv.substring(0, 32).getBytes(StandardCharsets.UTF_8);
         } else {
             MASTER_KEY = generateDefaultKey();
         }
@@ -35,9 +37,12 @@ public class CredentialEncryption {
             }
         }
         byte[] key = new byte[32];
-        new SecureRandom().nextBytes(key);
+        SECURE_RANDOM.nextBytes(key);
         try {
-            f.getParentFile().mkdirs();
+            java.io.File parent = f.getParentFile();
+            if (parent != null && !parent.mkdirs() && !parent.exists()) {
+                System.err.println("Warning: Could not create master key directory");
+            }
             java.nio.file.Files.write(f.toPath(), key);
             f.setReadable(true, false);
         } catch (Exception e) {
@@ -52,14 +57,14 @@ public class CredentialEncryption {
         }
         try {
             byte[] iv = new byte[GCM_IV_LENGTH];
-            new SecureRandom().nextBytes(iv);
+            SECURE_RANDOM.nextBytes(iv);
 
             SecretKey key = new SecretKeySpec(MASTER_KEY, "AES");
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
             cipher.init(Cipher.ENCRYPT_MODE, key, spec);
 
-            byte[] ciphertext = cipher.doFinal(plaintext.getBytes());
+            byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
 
             byte[] combined = new byte[iv.length + ciphertext.length];
             System.arraycopy(iv, 0, combined, 0, iv.length);
@@ -89,7 +94,7 @@ public class CredentialEncryption {
             cipher.init(Cipher.DECRYPT_MODE, key, spec);
 
             byte[] plaintext = cipher.doFinal(ciphertext);
-            return new String(plaintext);
+            return new String(plaintext, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new RuntimeException("Decryption failed", e);
         }

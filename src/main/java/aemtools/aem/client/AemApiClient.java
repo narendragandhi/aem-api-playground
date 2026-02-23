@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -152,7 +153,7 @@ public class AemApiClient {
     private String generateCacheKey(String method, String url) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest((method + ":" + url).getBytes());
+            byte[] hash = md.digest((method + ":" + url).getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();
             for (byte b : hash) {
                 hex.append(String.format("%02x", b));
@@ -221,7 +222,7 @@ public class AemApiClient {
 
     public JsonNode upload(String path, byte[] data, String contentType) throws IOException {
         HttpPost request = new HttpPost(buildUrl(path));
-        request.setEntity(new StringEntity(new String(data), ContentType.create(contentType)));
+        request.setEntity(new StringEntity(new String(data, StandardCharsets.UTF_8), ContentType.create(contentType)));
         return execute(request);
     }
 
