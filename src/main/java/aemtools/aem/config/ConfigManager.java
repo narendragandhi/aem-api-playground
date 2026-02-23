@@ -16,11 +16,36 @@ public class ConfigManager {
     private String activeEnvironment = "dev";
     private boolean debugEnabled = false;
     private final File configFile;
+    private final Map<String, String> defaults = new HashMap<>();
 
     private ConfigManager() {
         String configDir = System.getProperty("user.home") + "/.aem-api";
         this.configFile = new File(configDir + "/config.yaml");
+        defaults.put("output", "table");
+        defaults.put("max", "20");
+        defaults.put("timeout", "30");
+        defaults.put("cache", "true");
         load();
+    }
+
+    public void setDefault(String key, String value) {
+        defaults.put(key, value);
+    }
+
+    public String getDefault(String key, String defaultValue) {
+        return defaults.getOrDefault(key, defaultValue);
+    }
+
+    public int getDefaultInt(String key, int defaultValue) {
+        try {
+            return Integer.parseInt(defaults.getOrDefault(key, String.valueOf(defaultValue)));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    public boolean isCacheEnabled() {
+        return "true".equalsIgnoreCase(defaults.get("cache"));
     }
 
     public static synchronized ConfigManager getInstance() {

@@ -35,7 +35,7 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <mainClass>com.aemtools.cli.AemApi</mainClass>
+                  <mainClass>com.aemtools.aem.AemApi</mainClass>
                 </transformer>
               </transformers>
               <filters>
@@ -57,7 +57,7 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.1.1</version>
         <configuration>
-          <mainClass>com.aemtools.cli.AemApi</mainClass>
+          <mainClass>com.aemtools.aem.AemApi</mainClass>
         </configuration>
       </plugin>
     </plugins>

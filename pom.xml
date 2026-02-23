@@ -180,7 +180,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.1</version>
                 <configuration>
-                    <mainClass>com.aemtools.cli.AemApi</mainClass>
+                    <mainClass>com.aemtools.aem.AemApi</mainClass>
                 </configuration>
             </plugin>
         </plugins>
