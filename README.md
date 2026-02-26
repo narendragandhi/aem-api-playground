@@ -42,6 +42,27 @@ aem-api cf list --path /content/dam/my-project
 aem-api shell
 ```
 
+## AEM API Studio (GUI)
+
+A full-featured visual interface is included for users who prefer a graphical dashboard over the terminal.
+
+### Features
+- **Dashboard**: Quick view of environment health and active tasks.
+- **Content Browser**: Explore Assets and Content Fragments with a visual tree and property inspector.
+- **GraphQL Editor**: Test and execute GraphQL queries with variables.
+- **Workflow Monitor**: Track and manage running workflow instances.
+- **Recipe Runner**: Execute multi-step automation sequences visually.
+- **Integrated Console**: See the raw CLI logs and HTTP traffic in real-time.
+
+### Launching the Studio
+```bash
+# Standard Launch
+java -jar target/aem-api-1.0.0.jar gui
+
+# Mock Mode (Explore without a server)
+java -jar target/aem-api-1.0.0.jar --mock gui
+```
+
 ## Piping & Chaining
 
 ```bash

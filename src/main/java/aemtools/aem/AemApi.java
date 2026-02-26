@@ -54,6 +54,7 @@ import java.util.stream.Collectors;
         AemApi.AuditCommand.class,
         AemApi.AgentCommand.class,
         AemApi.CompletionCommand.class,
+        AemApi.GuiCommand.class,
         RecipeCommand.class
     }
 )
@@ -2043,6 +2044,27 @@ public class AemApi implements Callable<Integer> {
                     String execResponse = agent.executeAction(response);
                     System.out.println(execResponse);
                 }
+            }
+            return 0;
+        }
+    }
+
+    @Command(name = "gui", description = "Launch the visual interface (AEM API Studio)")
+    public static class GuiCommand implements java.util.concurrent.Callable<Integer> {
+        @Override
+        public Integer call() throws Exception {
+            System.out.println("Launching AEM API Studio GUI...");
+            try {
+                // Use reflection to call GUI without circular dependencies or compile-time issues
+                // if the GUI classes are not in the same package or have issues.
+                // In our case they are in com.aemtools.aem.gui
+                Class<?> guiClass = Class.forName("com.aemtools.aem.gui.AemStudioGui");
+                java.lang.reflect.Method launchMethod = guiClass.getMethod("launch");
+                launchMethod.invoke(null);
+            } catch (Exception e) {
+                System.err.println("Error: GUI component could not be launched: " + e.getMessage());
+                e.printStackTrace();
+                return 1;
             }
             return 0;
         }

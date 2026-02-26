@@ -275,4 +275,17 @@ public class ConfigManager {
     public java.util.Set<String> getEnvironmentNames() {
         return environments.keySet();
     }
+
+    public Map<String, String> getEnvironmentUrls() {
+        Map<String, String> urls = new HashMap<>();
+        for (Map.Entry<String, Map<String, String>> entry : environments.entrySet()) {
+            String url = entry.getValue().get("url");
+            if (url != null) {
+                urls.put(entry.getKey(), url);
+            } else {
+                urls.put(entry.getKey(), "(not set)");
+            }
+        }
+        return urls;
+    }
 }
