@@ -1,6 +1,6 @@
 package com.aemtools.aem.gui;
 
-import com.aemtools.aem.RecipeCommand;
+import com.aemtools.aem.commands.RecipeCommand;
 import picocli.CommandLine;
 
 import javax.swing.*;
@@ -85,21 +85,21 @@ public class RecipePanel extends JPanel {
 
                     if (selectedRecipe.contains("Site Launch")) {
                         // Simulate args: -p /content/sites/mysite -t "My New Site"
-                        com.aemtools.aem.RecipeCommand.SiteLaunchRecipe cmd = new com.aemtools.aem.RecipeCommand.SiteLaunchRecipe();
+                        RecipeCommand.SiteLaunchRecipe cmd = new RecipeCommand.SiteLaunchRecipe();
                         // Reflection or direct field access would be needed to set args if not using CommandLine.parse
                         // For this demo integration, we'll use the CLI parser to populate the object
                         return new CommandLine(cmd).execute("-p", "/content/sites/gui-site", "-t", "Created from GUI");
                     } else if (selectedRecipe.contains("Content Backup")) {
-                        return new CommandLine(new com.aemtools.aem.RecipeCommand.ContentBackupRecipe())
+                        return new CommandLine(new RecipeCommand.ContentBackupRecipe())
                             .execute("-p", "/content/dam", "-o", "./gui-backup");
                     } else if (selectedRecipe.contains("Asset Batch")) {
-                        return new CommandLine(new com.aemtools.aem.RecipeCommand.AssetBatchRecipe())
+                        return new CommandLine(new RecipeCommand.AssetBatchRecipe())
                             .execute("-p", "/content/dam/incoming", "-t", "gui-processed");
                     } else if (selectedRecipe.contains("User Onboarding")) {
-                        return new CommandLine(new com.aemtools.aem.RecipeCommand.UserOnboardingRecipe())
+                        return new CommandLine(new RecipeCommand.UserOnboardingRecipe())
                             .execute("-u", "gui-user", "-e", "user@example.com");
                     } else if (selectedRecipe.contains("Package Migrate")) {
-                        return new CommandLine(new com.aemtools.aem.RecipeCommand.PackageMigrateRecipe())
+                        return new CommandLine(new RecipeCommand.PackageMigrateRecipe())
                             .execute("-n", "gui-package", "-s", "dev", "-t", "stage");
                     }
                     return 0;

@@ -1,5 +1,6 @@
 package com.aemtools.aem;
 
+import com.aemtools.aem.commands.RecipeCommand;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 

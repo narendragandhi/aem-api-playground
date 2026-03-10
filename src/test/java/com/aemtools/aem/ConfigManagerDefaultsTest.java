@@ -1,10 +1,21 @@
 package com.aemtools.aem;
 
 import com.aemtools.aem.config.ConfigManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ConfigManagerDefaultsTest {
+
+    @BeforeEach
+    void resetDefaults() {
+        // Reset to known defaults before each test to avoid cross-test pollution
+        ConfigManager config = ConfigManager.getInstance();
+        config.setDefault("output", "table");
+        config.setDefault("max", "20");
+        config.setDefault("timeout", "30");
+        config.setDefault("cache", "true");
+    }
 
     @Test
     void testSetDefault() {

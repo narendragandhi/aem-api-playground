@@ -1,5 +1,7 @@
 package com.aemtools.aem.agent;
 
+import com.aemtools.aem.api.WorkflowApi;
+import com.aemtools.aem.api.WorkflowApi.*;
 import com.aemtools.aem.client.AemApiClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,7 +63,10 @@ public class AemAgent {
         - delete_asset: Delete an asset
         - list_pages: List pages
         - graphql_query: Execute GraphQL query
-        - start_workflow: Start a workflow
+        - start_workflow: Start a workflow (params: model, payload)
+        - list_workflows: List workflow instances (params: status, limit)
+        - terminate_workflow: Terminate a workflow (params: id)
+        - get_workflow_status: Get workflow status (params: id)
         
         When user asks to do something, respond with a JSON action object:
         {"action": "action_name", "params": {"key": "value"}}
@@ -219,6 +224,9 @@ public class AemAgent {
                 case "list_pages" -> executeListPages(params);
                 case "graphql_query" -> executeGraphQL(params);
                 case "start_workflow" -> executeStartWorkflow(params);
+                case "list_workflows" -> executeListWorkflows(params);
+                case "terminate_workflow" -> executeTerminateWorkflow(params);
+                case "get_workflow_status" -> executeGetWorkflowStatus(params);
                 default -> "Unknown action: " + actionName;
             };
         } catch (Exception e) {
@@ -285,7 +293,113 @@ public class AemAgent {
     }
 
     private String executeStartWorkflow(JsonNode params) {
-        return "Starting workflow... (not implemented)";
+        try {
+            String model = params.path("model").asText();
+            String payload = params.path("payload").asText();
+
+            if (model.isEmpty() || payload.isEmpty()) {
+                return "Error: Both 'model' and 'payload' parameters are required for start_workflow";
+            }
+
+            WorkflowApi workflowApi = new WorkflowApi(apiClient);
+            WorkflowInstance instance = workflowApi.startWorkflow(model, payload);
+
+            StringBuilder sb = new StringBuilder("Workflow started successfully!\n");
+            sb.append("  Instance ID: ").append(instance.getId()).append("\n");
+            sb.append("  Model: ").append(instance.getModelTitle()).append("\n");
+            sb.append("  Payload: ").append(instance.getPayload()).append("\n");
+            sb.append("  Status: ").append(instance.getStatus());
+            return sb.toString();
+        } catch (Exception e) {
+            return "Error starting workflow: " + e.getMessage();
+        }
+    }
+
+    private String executeListWorkflows(JsonNode params) {
+        try {
+            String statusStr = params.path("status").asText();
+            int limit = params.path("limit").asInt(20);
+
+            WorkflowApi workflowApi = new WorkflowApi(apiClient);
+            WorkflowApi.WorkflowStatus status = null;
+
+            if (!statusStr.isEmpty()) {
+                try {
+                    status = WorkflowApi.WorkflowStatus.valueOf(statusStr.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    return "Invalid status. Use: RUNNING, COMPLETED, ABORTED, SUSPENDED, STALE";
+                }
+            }
+
+            List<WorkflowInstance> instances = workflowApi.listInstances(status, limit);
+
+            if (instances.isEmpty()) {
+                return "No workflow instances found" + (status != null ? " with status " + status : "");
+            }
+
+            StringBuilder sb = new StringBuilder("Workflow Instances:\n");
+            for (WorkflowInstance wf : instances) {
+                sb.append("  ").append(wf.getId()).append(" - ").append(wf.getModelTitle());
+                sb.append(" [").append(wf.getStatus()).append("]\n");
+                sb.append("    Payload: ").append(wf.getPayload()).append("\n");
+                sb.append("    Initiator: ").append(wf.getInitiator()).append("\n");
+            }
+            sb.append("\nTotal: ").append(instances.size());
+            return sb.toString();
+        } catch (Exception e) {
+            return "Error listing workflows: " + e.getMessage();
+        }
+    }
+
+    private String executeTerminateWorkflow(JsonNode params) {
+        try {
+            String instanceId = params.path("id").asText();
+
+            if (instanceId.isEmpty()) {
+                return "Error: 'id' parameter is required for terminate_workflow";
+            }
+
+            WorkflowApi workflowApi = new WorkflowApi(apiClient);
+            boolean success = workflowApi.terminateWorkflow(instanceId);
+
+            if (success) {
+                return "Workflow terminated successfully: " + instanceId;
+            } else {
+                return "Failed to terminate workflow: " + instanceId;
+            }
+        } catch (Exception e) {
+            return "Error terminating workflow: " + e.getMessage();
+        }
+    }
+
+    private String executeGetWorkflowStatus(JsonNode params) {
+        try {
+            String instanceId = params.path("id").asText();
+
+            if (instanceId.isEmpty()) {
+                return "Error: 'id' parameter is required for get_workflow_status";
+            }
+
+            WorkflowApi workflowApi = new WorkflowApi(apiClient);
+            WorkflowInstance instance = workflowApi.getInstance(instanceId);
+
+            StringBuilder sb = new StringBuilder("Workflow Status:\n");
+            sb.append("  Instance ID: ").append(instance.getId()).append("\n");
+            sb.append("  Model: ").append(instance.getModelTitle()).append("\n");
+            sb.append("  Status: ").append(instance.getStatus()).append("\n");
+            sb.append("  Payload: ").append(instance.getPayload()).append("\n");
+            sb.append("  Initiator: ").append(instance.getInitiator()).append("\n");
+            sb.append("  Started: ").append(instance.getStartTime());
+            if (instance.getEndTime() != null && !instance.getEndTime().isEmpty()) {
+                sb.append("\n  Ended: ").append(instance.getEndTime());
+            }
+            if (instance.getCurrentStep() != null && !instance.getCurrentStep().isEmpty()) {
+                sb.append("\n  Current Step: ").append(instance.getCurrentStep());
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "Error getting workflow status: " + e.getMessage();
+        }
     }
 
     public void clearHistory() {

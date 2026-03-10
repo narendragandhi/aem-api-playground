@@ -1,5 +1,6 @@
 package com.aemtools.aem.client;
 
+import com.aemtools.aem.audit.AuditLogger;
 import com.aemtools.aem.config.ConfigManager;
 import com.aemtools.aem.config.LoggerManager;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -357,9 +358,30 @@ public class AemApiClient {
     }
 
     private void logAudit(String method, String path, int statusCode) {
+        logAudit(method, path, statusCode, 0, null);
+    }
+
+    private void logAudit(String method, String path, int statusCode, long durationMs, String errorMessage) {
         String key = Instant.now().toString() + "|" + method + "|" + path + "|" + statusCode;
         auditLog.put(key, method + " " + path + " -> " + statusCode);
         logger.info("AUDIT: {} {} -> {}", method, path, statusCode);
+
+        // Persist to SQLite
+        try {
+            AuditLogger.getInstance().logApiCall(
+                method,
+                path,
+                statusCode,
+                durationMs,
+                configManager.getActiveEnvironment(),
+                null, // userId - could be extracted from auth
+                null, // requestSize
+                null, // responseSize
+                errorMessage
+            );
+        } catch (Exception e) {
+            logger.debug("Failed to persist audit log: {}", e.getMessage());
+        }
     }
 
     public Map<String, String> getAuditLog() {

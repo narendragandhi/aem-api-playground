@@ -39,7 +39,11 @@ public class InputValidator {
         if (path == null) {
             return null;
         }
-        return path.replaceAll("\\.\\.", "").replaceAll("\u0000", "");
+        // Remove path traversal sequences and null bytes
+        String sanitized = path.replaceAll("\\.\\.", "").replaceAll("\u0000", "");
+        // Normalize consecutive slashes to single slash
+        sanitized = sanitized.replaceAll("/+", "/");
+        return sanitized;
     }
 
     public static void validatePath(String path) {
