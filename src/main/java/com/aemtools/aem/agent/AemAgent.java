@@ -264,7 +264,21 @@ public class AemAgent {
     }
 
     private String executeUploadAsset(JsonNode params) {
-        return "Upload asset... (need file path implementation)";
+        String folderPath = params.path("folder").asText();
+        String filePath = params.path("path").asText();
+        
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+            if (!java.nio.file.Files.exists(path)) {
+                return "Error: Local file not found at " + filePath;
+            }
+            
+            com.aemtools.aem.api.AssetsApi assetsApi = new com.aemtools.aem.api.AssetsApi(apiClient);
+            com.aemtools.aem.api.AssetsApi.Asset asset = assetsApi.uploadFile(folderPath, path);
+            return "Successfully uploaded asset: " + asset.getName() + " to " + folderPath;
+        } catch (Exception e) {
+            return "Error uploading asset: " + e.getMessage();
+        }
     }
 
     private String executeDeleteAsset(JsonNode params) throws IOException {
