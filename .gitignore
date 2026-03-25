@@ -1,11 +1,29 @@
 target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### IntelliJ IDEA ###
 .idea/
+*.iws
 *.iml
+*.ipr
+
+### Eclipse ###
+.settings/
+.project
+.classpath
+.factorypath
+
+### VS Code ###
+.vscode/
+
+### OS X ###
 .DS_Store
+
+### Log files ###
 *.log
-.aem-api/
-.env
-*.pem
-*.key
-*.crt
-credentials.json
+
+### Temporary files ###
+backup/
+tmp/
