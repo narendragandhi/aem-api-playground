@@ -99,43 +99,76 @@ public class RecipeCommand implements Callable<Integer> {
      * Recipe to backup content including content fragments and packages.
      */
     @Command(name = "content-backup",
-             description = "Backup content: export CFs, download packages")
+             description = "Backup content: create package for path, build and download")
     public static class ContentBackupRecipe implements Callable<Integer> {
         @Option(names = {"-p", "--path"},
-                description = "Content path to backup",
+                description = "Content path to backup (e.g. /content/dam/myapp)",
                 required = true)
         private String path;
 
         @Option(names = {"-o", "--output"},
-                description = "Output directory",
+                description = "Output directory for the .zip package",
                 defaultValue = "./backup")
         private String outputDir;
 
-        @Option(names = {"--include-cf"},
-                description = "Include content fragments",
-                defaultValue = "true")
-        private boolean includeCf;
-
-        @Option(names = {"--include-assets"},
-                description = "Include assets",
-                defaultValue = "true")
-        private boolean includeAssets;
+        @Option(names = {"--group"},
+                description = "Package group name",
+                defaultValue = "backups")
+        private String group;
 
         @Override
         public Integer call() throws Exception {
             System.out.println("\n=== Content Backup Recipe ===");
             System.out.println("Path: " + path);
-            System.out.println("Output: " + outputDir);
+            System.out.println("Output Folder: " + outputDir);
 
             if (CliFlags.mockMode || CliFlags.dryRunMode) {
                 String mode = CliFlags.mockMode ? "MOCK MODE" : "DRY RUN";
-                System.out.println("\n[" + mode + "] Would execute backup of " + path);
+                System.out.println("\n[" + mode + "] Would create and download package for " + path);
                 return 0;
             }
 
-            System.out.println("\nExecuting backup...");
-            System.out.println("  [1/4] Listing content...");
-            System.out.println("\nBackup completed (placeholder implementation)!");
+            AemApiClient client = new AemApiClient();
+            PackagesApi packagesApi = new PackagesApi(client);
+
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            String packageName = "backup_" + path.replace("/", "_").substring(1) + "_" + timestamp;
+
+            try {
+                // Ensure output directory exists
+                Path outPath = Paths.get(outputDir);
+                if (!Files.exists(outPath)) {
+                    Files.createDirectories(outPath);
+                }
+
+                System.out.println("\nStep 1: Creating backup package definition...");
+                // Note: Recreate uses a filter XML. Minimal one for the path:
+                String filterXml = String.format("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                        "<workspaceFilter version=\"1.0\"><filter root=\"%s\"/></workspaceFilter>", path);
+                packagesApi.recreate(group, packageName, filterXml);
+
+                System.out.println("Step 2: Building package...");
+                boolean buildSuccess = packagesApi.build(group, packageName);
+                if (!buildSuccess) {
+                    System.err.println("Error: Package build failed on server.");
+                    return 1;
+                }
+
+                System.out.println("Step 3: Downloading package...");
+                Path localZip = outPath.resolve(packageName + ".zip");
+                packagesApi.download(group, packageName, localZip);
+
+                System.out.println("\nBackup complete! File saved to: " + localZip.toAbsolutePath());
+                
+                // Cleanup? Usually good practice to delete the temporary package on the server
+                // System.out.println("Step 4: Cleaning up temporary package on server...");
+                // packagesApi.delete(group, packageName);
+
+            } catch (Exception e) {
+                System.err.println("\nBackup failed: " + e.getMessage());
+                return 1;
+            }
+
             return 0;
         }
     }
