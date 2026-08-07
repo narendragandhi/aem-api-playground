@@ -26,7 +26,7 @@ A command-line interface for testing Adobe Experience Manager (AEM) APIs.
 ## Quick Start
 
 ```bash
-# Build
+# Build (use ./mvnw if you don't have Maven installed)
 mvn package
 
 # Run
@@ -91,15 +91,43 @@ aem-api cf list | export results.txt
 
 | Command | Description |
 |---------|-------------|
+| `shell` | Enter interactive shell mode |
+| `connect` | Connect to an AEM environment (basic auth / OAuth / IMS) |
 | `cf` | Content Fragment CRUD |
 | `assets` | DAM asset management |
 | `sites` | Pages & sites |
-| `graphql` | GraphQL queries |
-| `workflow` | Workflow operations |
+| `forms` | Adaptive Forms operations |
+| `config` | Configuration management (environments, defaults) |
+| `graphql` | GraphQL queries (adhoc + persisted) |
+| `translation` | Translation projects & jobs |
+| `cloudmgr` | Cloud Manager API (programs, pipelines) |
+| `folders` | DAM folder operations |
+| `tags` | Tag management (create, merge, apply, usage) |
+| `workflow` | Workflow operations (list, start, terminate, inbox, stats) |
+| `users` | User & group management |
 | `replicate` | Publish/unpublish |
 | `packages` | Package management |
-| `users` | User management |
-| `agent` | AI-powered assistant |
+| `models` | Content Fragment Models |
+| `audit` | Audit log & API cache operations |
+| `agent` | AI-powered assistant (OpenAI / Anthropic / Ollama) |
+| `completion` | Generate shell completion scripts |
+| `gui` | Launch the AEM API Studio (desktop GUI) |
+| `recipe` | Predefined multi-step recipes (site-launch, content-backup, …) |
+
+### Global flags
+
+Global options can be placed before any subcommand:
+
+```bash
+aem-api --mock cf list                  # run against mock data (no AEM needed)
+aem-api --dry-run replicate publish     # show what would happen
+aem-api --json workflow list            # JSON output
+aem-api --output raw assets list        # table | json | raw
+aem-api --max 100 cf list               # max results
+aem-api --timeout 60 graphql query      # request timeout (seconds)
+aem-api --cache false cf list           # disable response cache
+aem-api --verbose shell                 # verbose output
+```
 
 ## Architecture
 

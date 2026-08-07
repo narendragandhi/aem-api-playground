@@ -100,7 +100,7 @@ public class CompletionCommand implements Callable<Integer> {
                 cur="${COMP_WORDS[COMP_CWORD]}"
                 prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-                opts="shell connect cf assets sites forms config graphql translation cloudmgr folders tags workflow users replicate packages models audit agent completion help version -v --verbose --debug"
+                opts="shell connect cf assets sites forms config graphql translation cloudmgr folders tags workflow users replicate packages models audit agent completion help version -v --verbose --mock --dry-run --json --output --max --timeout --cache"
 
                 COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
                 return 0

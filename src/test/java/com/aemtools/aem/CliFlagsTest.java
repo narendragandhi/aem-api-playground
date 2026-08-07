@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+import picocli.CommandLine;
+
 public class CliFlagsTest {
 
     @BeforeEach
@@ -18,10 +20,14 @@ public class CliFlagsTest {
         CliFlags.cacheEnabled = true;
     }
 
+    private void parse(String... args) {
+        CommandLine cmd = new CommandLine(new AemApi());
+        cmd.parseArgs(args);
+    }
+
     @Test
     void testParseMockFlag() {
-        String[] args = {"--mock", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--mock", "cf", "list");
         assertTrue(CliFlags.mockMode);
         assertFalse(CliFlags.dryRunMode);
         assertFalse(CliFlags.jsonOutput);
@@ -29,65 +35,57 @@ public class CliFlagsTest {
 
     @Test
     void testParseDryRunFlag() {
-        String[] args = {"--dry-run", "replicate", "publish", "-p", "/content/test"};
-        CliFlags.parse(args);
+        parse("--dry-run", "replicate", "publish", "-p", "/content/test");
         assertTrue(CliFlags.dryRunMode);
         assertFalse(CliFlags.mockMode);
     }
 
     @Test
     void testParseJsonFlag() {
-        String[] args = {"--json", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--json", "cf", "list");
         assertTrue(CliFlags.jsonOutput);
         assertEquals("json", CliFlags.outputFormat);
     }
 
     @Test
     void testParseOutputFormat() {
-        String[] args = {"--output", "raw", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--output", "raw", "cf", "list");
         assertEquals("raw", CliFlags.outputFormat);
     }
 
     @Test
     void testParseMaxResults() {
-        String[] args = {"--max", "100", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--max", "100", "cf", "list");
         assertEquals(100, CliFlags.maxResults);
     }
 
     @Test
     void testParseTimeout() {
-        String[] args = {"--timeout", "60", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--timeout", "60", "cf", "list");
         assertEquals(60000, CliFlags.timeout);
     }
 
     @Test
     void testParseCacheFlag() {
-        String[] args = {"--cache", "false", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--cache", "false", "cf", "list");
         assertFalse(CliFlags.cacheEnabled);
     }
 
     @Test
     void testParseVerboseFlag() {
-        String[] args = {"--verbose", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--verbose", "cf", "list");
         assertTrue(CliFlags.verbose);
     }
 
     @Test
     void testOutputJsonSetsJsonOutput() {
-        String[] args = {"--output", "json", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--output", "json", "cf", "list");
         assertTrue(CliFlags.jsonOutput);
     }
 
     @Test
     void testDefaultValues() {
-        CliFlags.parse(new String[]{});
+        parse();
         assertFalse(CliFlags.mockMode);
         assertFalse(CliFlags.dryRunMode);
         assertFalse(CliFlags.jsonOutput);

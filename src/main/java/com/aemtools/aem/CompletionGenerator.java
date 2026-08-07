@@ -100,7 +100,7 @@ public class CompletionGenerator {
     }
 
     private static String getOptions() {
-        return "-v --verbose --debug -h --help";
+        return "-v --verbose --mock --dry-run --json --output --max --timeout --cache -h --help";
     }
 
     private static String getCommandsZsh() {
@@ -132,7 +132,13 @@ public class CompletionGenerator {
         return """
             '-v[Enable verbose output]'
             '--verbose[Enable verbose output]'
-            '--debug[Enable debug mode]'
+            '--mock[Use mock data (no AEM connection required)]'
+            '--dry-run[Show what would happen without making actual changes]'
+            '--json[Output in JSON format]'
+            '--output[Output format: table, json, raw]'
+            '--max[Max results]'
+            '--timeout[Request timeout in seconds]'
+            '--cache[Enable/disable cache: true, false]'
             '-h[Show help]'
             '--help[Show help]'""";
     }

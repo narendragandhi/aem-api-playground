@@ -20,6 +20,11 @@ public class AemApiCliTest {
         CliFlags.cacheEnabled = true;
     }
 
+    private void parse(String... args) {
+        CommandLine cmd = new CommandLine(new AemApi());
+        cmd.parseArgs(args);
+    }
+
     @Test
     void testMainClassExists() {
         assertNotNull(AemApi.class);
@@ -38,39 +43,28 @@ public class AemApiCliTest {
 
     @Test
     void testMockModeCanBeSet() {
-        String[] args = {"--mock", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--mock", "cf", "list");
         assertTrue(CliFlags.mockMode);
     }
 
     @Test
     void testDryRunModeCanBeSet() {
-        String[] args = {"--dry-run", "replicate", "publish", "-p", "/content"};
-        CliFlags.parse(args);
+        parse("--dry-run", "replicate", "publish", "-p", "/content");
         assertTrue(CliFlags.dryRunMode);
     }
 
     @Test
     void testJsonOutputCanBeSet() {
-        String[] args = {"--json", "cf", "list"};
-        CliFlags.parse(args);
+        parse("--json", "cf", "list");
         assertTrue(CliFlags.jsonOutput);
     }
 
     @Test
     void testAllFlagsCanBeCombined() {
         // Note: --json takes precedence over --output, so outputFormat will be "json"
-        String[] args = {
-            "--mock",
-            "--json", 
-            "--verbose",
-            "--max", "50",
-            "--timeout", "60",
-            "--cache", "false",
-            "cf", "list"
-        };
-        CliFlags.parse(args);
-        
+        parse("--mock", "--json", "--verbose", "--max", "50", "--timeout", "60",
+              "--cache", "false", "cf", "list");
+
         assertTrue(CliFlags.mockMode);
         assertTrue(CliFlags.jsonOutput);
         assertTrue(CliFlags.verbose);

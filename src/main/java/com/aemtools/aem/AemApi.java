@@ -25,6 +25,7 @@ import com.aemtools.aem.commands.RecipeCommand;
 import com.aemtools.aem.config.LoggerManager;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 import java.nio.file.Files;
@@ -82,11 +83,8 @@ import java.util.concurrent.Callable;
 )
 public class AemApi implements Callable<Integer> {
 
-    @Option(names = {"-v", "--verbose"}, description = "Enable verbose output")
-    private boolean verbose;
-
-    @Option(names = {"--debug"}, description = "Enable debug mode (show HTTP requests/responses)")
-    private boolean debug;
+    @Mixin
+    private GlobalFlags globalFlags = new GlobalFlags();
 
     @Option(names = {"--log-level", "--logLevel"},
             description = "Log level: silly, debug, verbose, info, warn, error",
@@ -120,35 +118,12 @@ public class AemApi implements Callable<Integer> {
             order = 5)
     private String envFile;
 
-    @Option(names = {"--mock"}, description = "Use mock data (no AEM connection required)")
-    private boolean mock;
-
-    @Option(names = {"--dry-run"}, description = "Show what would happen without making actual changes")
-    private boolean dryRun;
-
-    @Option(names = {"--json"}, description = "Output in JSON format")
-    private boolean json;
-
-    @Option(names = {"--output"}, description = "Output format: table, json, raw")
-    private String output;
-
-    @Option(names = {"--max"}, description = "Max results")
-    private int max;
-
-    @Option(names = {"--timeout"}, description = "Request timeout in seconds")
-    private int timeout;
-
-    @Option(names = {"--cache"}, description = "Enable/disable cache: true, false")
-    private String cache;
-
     /**
      * Main entry point for the CLI application.
      *
      * @param args command line arguments
      */
     public static void main(String[] args) {
-        CliFlags.parse(args);
-
         CommandLine cmd = new CommandLine(new AemApi())
             .setCaseInsensitiveEnumValuesAllowed(true);
 

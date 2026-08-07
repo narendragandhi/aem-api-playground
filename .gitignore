@@ -3,6 +3,11 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Environment files ###
+.env
+*.env
+!.env.example
+
 ### IntelliJ IDEA ###
 .idea/
 *.iws
@@ -27,3 +32,6 @@ target/
 ### Temporary files ###
 backup/
 tmp/
+
+### Build artifacts ###
+dependency-reduced-pom.xml

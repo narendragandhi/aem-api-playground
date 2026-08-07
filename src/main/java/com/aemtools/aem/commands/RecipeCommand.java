@@ -2,6 +2,8 @@ package com.aemtools.aem.commands;
 
 import com.aemtools.aem.CliFlags;
 import com.aemtools.aem.api.AssetsApi;
+import com.aemtools.aem.api.PackagesApi;
+import com.aemtools.aem.api.PagesApi;
 import com.aemtools.aem.api.ReplicationApi;
 import com.aemtools.aem.api.TagsApi;
 import com.aemtools.aem.api.UsersApi;
