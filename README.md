@@ -129,6 +129,58 @@ aem-api --cache false cf list           # disable response cache
 aem-api --verbose shell                 # verbose output
 ```
 
+## Supported AEM versions & endpoints
+
+The CLI calls AEM over **two generations of endpoints**. Make sure your AEM
+instance supports the endpoints used by the commands you run.
+
+### Modern `/api/*` endpoints (AEM as a Cloud Service, AEM 6.5 SP13+)
+
+| Command | Endpoint |
+|---------|----------|
+| `pages create / update / delete / move` | `/api/pages` |
+| `cf list / get / create / delete` | `/api/content/fragments` |
+| `assets list / get / delete / move` | `/api/assets` |
+| `workflow start / list` | `/api/workflow/instances` |
+
+These are the only officially supported APIs going forward and are required for
+`pages` CRUD and modern fragment/asset operations.
+
+### Legacy `/bin/*`, `/etc/*` and `/crx/*` endpoints (classic AEM 6.x)
+
+| Command | Endpoint |
+|---------|----------|
+| `replicate publish / unpublish` | `/bin/replicate.json` |
+| `workflow inbox / history / purge` | `/bin/workflow/inbox`, `/bin/workflow/history.json`, `/etc/workflow/instances.purge.json` |
+| `users`, `groups`, `tags` (search) | `/bin/querybuilder.json` |
+| `pages search` | `/bin/cq/search.json` |
+| `packages` (all operations) | `/crx/packmgr/*` |
+
+### Caveats
+
+- **`pages create/update/delete/move` fail on AEM 6.5 before SP13** and on any
+  AEM 6.4 or earlier — the modern `/api/pages` endpoint does not exist there.
+  `pages list/get` and `pages search` still work because they use `.1.json` /
+  `/bin/cq/search.json`.
+- **`workflow start` tries `/api/workflow/instances` first, then falls back to
+  `/etc/workflow/instances`** when the modern endpoint returns 404, so it works
+  on both generations. The `workflow inbox`/`history`/`purge` commands are
+  classic-only and have no `/api/*` equivalent.
+- **`tags` and `users` rely on `/bin/querybuilder.json`**, which exists on all
+  AEM 6.x and Cloud Service instances, but response formats can vary slightly
+  between major versions.
+- Always validate against your target version. When in doubt, run a command in
+  `--dry-run` or `--mock` first and inspect the exact HTTP path it would call.
+
+### Current limitations
+
+- Test coverage is focused on the API layer and data parsing (~25% instruction,
+  ~24% line). The GUI (`gui`), interactive shell, MCP server, and AI agent
+  (`agent`) are not yet covered by automated tests.
+- `recipe package-migrate` downloads the package from the active environment and
+  uploads/installs it to `--target-url` with the supplied auth. Verify that your
+  user has package-manager rights on both environments before running it.
+
 ## Architecture
 
 ```

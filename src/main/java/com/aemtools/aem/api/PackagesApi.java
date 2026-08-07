@@ -122,10 +122,10 @@ public class PackagesApi {
         Package pkg = new Package();
         
         String path = node.path("path").asText();
-        String[] parts = path.split("/");
+        String[] parts = path.replace(".zip", "").split("/");
         if (parts.length >= 3) {
-            pkg.setGroup(parts[1]);
-            pkg.setName(parts[2].replace(".zip", ""));
+            pkg.setGroup(parts[parts.length - 2]);
+            pkg.setName(parts[parts.length - 1]);
         }
         
         pkg.setPath(path);

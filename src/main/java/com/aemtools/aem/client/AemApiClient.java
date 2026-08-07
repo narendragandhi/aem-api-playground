@@ -11,6 +11,8 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.HttpRequest;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.http.message.BasicClassicHttpRequest;
@@ -44,6 +46,8 @@ public class AemApiClient {
     private String httpProxy;
     private String httpsProxy;
     private String noProxy;
+    private String baseUrlOverride;
+    private String authOverride;
     
     private final Map<String, CacheEntry> responseCache = new LinkedHashMap<>(16, 0.75f, true) {
         @Override
@@ -84,6 +88,22 @@ public class AemApiClient {
         this.httpsProxy = httpsProxy;
         this.noProxy = noProxy;
         logger.info("Proxy settings updated: http={}, https={}, no-proxy={}", httpProxy, httpsProxy, noProxy);
+    }
+
+    /**
+     * Points this client at an explicit base URL and auth header, overriding the
+     * globally active environment. Used by recipes that operate across two AEM
+     * environments (e.g. package migration) where the destination is not the
+     * active environment.
+     *
+     * @param baseUrl     AEM base URL (e.g. https://author.example.com)
+     * @param authHeader  full Authorization header value (e.g. "Basic <b64>" or "Bearer <token>")
+     * @return this client for chaining
+     */
+    public AemApiClient withTarget(String baseUrl, String authHeader) {
+        this.baseUrlOverride = baseUrl;
+        this.authOverride = authHeader;
+        return this;
     }
 
     private boolean shouldBypassProxy(String host) {
@@ -223,7 +243,7 @@ public class AemApiClient {
 
     public JsonNode upload(String path, byte[] data, String contentType) throws IOException {
         HttpPost request = new HttpPost(buildUrl(path));
-        request.setEntity(new StringEntity(new String(data, StandardCharsets.UTF_8), ContentType.create(contentType)));
+        request.setEntity(new ByteArrayEntity(data, ContentType.create(contentType)));
         return execute(request);
     }
 
@@ -244,14 +264,7 @@ public class AemApiClient {
     }
 
     private JsonNode executeDirect(BasicClassicHttpRequest request) throws IOException {
-        String token = configManager.getActiveAccessToken();
-        String basicAuth = configManager.getActiveBasicAuth();
-        
-        if (basicAuth != null && !basicAuth.isEmpty()) {
-            request.setHeader("Authorization", "Basic " + basicAuth);
-        } else if (token != null && !token.isEmpty()) {
-            request.setHeader("Authorization", "Bearer " + token);
-        }
+        applyAuth(request);
         request.setHeader("Accept", "application/json");
 
         String path;
@@ -304,14 +317,7 @@ public class AemApiClient {
     }
 
     private JsonNode execute(HttpUriRequestBase request) throws IOException {
-        String token = configManager.getActiveAccessToken();
-        String basicAuth = configManager.getActiveBasicAuth();
-        
-        if (basicAuth != null && !basicAuth.isEmpty()) {
-            request.setHeader("Authorization", "Basic " + basicAuth);
-        } else if (token != null && !token.isEmpty()) {
-            request.setHeader("Authorization", "Bearer " + token);
-        }
+        applyAuth(request);
         request.setHeader("Accept", "application/json");
 
         String path;
@@ -388,8 +394,23 @@ public class AemApiClient {
         return new ConcurrentHashMap<>(auditLog);
     }
 
+    private void applyAuth(HttpRequest request) {
+        if (authOverride != null && !authOverride.isEmpty()) {
+            request.setHeader("Authorization", authOverride);
+            return;
+        }
+        String token = configManager.getActiveAccessToken();
+        String basicAuth = configManager.getActiveBasicAuth();
+
+        if (basicAuth != null && !basicAuth.isEmpty()) {
+            request.setHeader("Authorization", "Basic " + basicAuth);
+        } else if (token != null && !token.isEmpty()) {
+            request.setHeader("Authorization", "Bearer " + token);
+        }
+    }
+
     private String buildUrl(String path) {
-        String baseUrl = configManager.getActiveEnvironmentUrl();
+        String baseUrl = baseUrlOverride != null ? baseUrlOverride : configManager.getActiveEnvironmentUrl();
         if (baseUrl == null || baseUrl.isEmpty()) {
             throw new IllegalStateException("No active environment URL configured");
         }

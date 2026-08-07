@@ -441,7 +441,9 @@ public class UsersApi {
         JsonNode impNode = response.path("impersonators");
         if (impNode.isArray()) {
             for (JsonNode imp : impNode) {
-                impersonators.add(imp.asText());
+                String impPath = imp.asText();
+                String impId = impPath.substring(impPath.lastIndexOf('/') + 1);
+                impersonators.add(impId);
             }
         }
 

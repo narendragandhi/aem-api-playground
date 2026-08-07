@@ -350,9 +350,12 @@ public class RecipeCommand implements Callable<Integer> {
         private String targetUrl;
 
         @Option(names = {"--target-auth"},
-                description = "Target Basic Auth (base64 encoded user:pass)",
-                required = true)
+                description = "Target Basic Auth (base64 encoded user:pass)")
         private String targetAuth;
+
+        @Option(names = {"--target-token"},
+                description = "Target Bearer access token")
+        private String targetToken;
 
         @Option(names = {"--install"},
                 description = "Install after upload",
@@ -371,36 +374,59 @@ public class RecipeCommand implements Callable<Integer> {
                 return 0;
             }
 
+            if ((targetAuth == null || targetAuth.isEmpty())
+                    && (targetToken == null || targetToken.isEmpty())) {
+                System.err.println("Error: --target-auth or --target-token is required");
+                return 1;
+            }
+
+            String authHeader = null;
+            if (targetToken != null && !targetToken.isEmpty()) {
+                authHeader = targetToken.startsWith("Bearer ") ? targetToken : "Bearer " + targetToken;
+            } else {
+                authHeader = targetAuth.startsWith("Basic ") ? targetAuth : "Basic " + targetAuth;
+            }
+
+            Path tempDir = null;
             try {
-                Path tempDir = Files.createTempDirectory("aem-pkg-migrate-");
+                tempDir = Files.createTempDirectory("aem-pkg-migrate-");
                 Path pkgPath = tempDir.resolve(name + ".zip");
 
-                // Source operation (Active Env)
                 System.out.println("\nStep 1: Downloading package from current environment...");
                 AemApiClient sourceClient = new AemApiClient();
                 PackagesApi sourceApi = new PackagesApi(sourceClient);
                 sourceApi.download(group, name, pkgPath);
+                System.out.println("  Downloaded to: " + pkgPath.toAbsolutePath());
 
-                // Target operation (Ad-hoc client for target)
-                System.out.println("Step 2: Connecting to target environment [" + targetUrl + "]...");
-                // Note: This requires a way to inject ad-hoc config into a client.
-                // For simplicity, we'll assume the current client can be reconfigured or 
-                // we'll use a manual HTTP call if needed. Here we assume we can't easily switch ConfigManager global state.
-                // Implementation note: A production-ready tool would have a multi-env client factory.
-                
-                System.out.println("Step 3: Uploading to target...");
-                // Manual client for target
-                AemApiClient targetClient = new AemApiClient();
-                // This is a bit hacky as ConfigManager is global, but shows the intent.
-                // In a real CLI, we'd pass the auth directly to the client constructor.
-                
-                System.out.println("\nPackage migration recipe completed (partial: download verified)!");
-                System.out.println("Package saved locally to: " + pkgPath.toAbsolutePath());
-                System.out.println("Ready for manual upload to: " + targetUrl);
+                System.out.println("Step 2: Uploading package to target [" + targetUrl + "]...");
+                AemApiClient targetClient = new AemApiClient().withTarget(targetUrl, authHeader);
+                PackagesApi targetApi = new PackagesApi(targetClient);
+                targetApi.upload(pkgPath);
+                System.out.println("  Uploaded: " + name + ".zip");
 
+                if (install) {
+                    System.out.println("Step 3: Installing package on target...");
+                    boolean installed = targetApi.install(group, name);
+                    if (!installed) {
+                        System.err.println("  Warning: server reported install failure for " + group + ":" + name);
+                        return 1;
+                    }
+                    System.out.println("  Installed: " + group + ":" + name);
+                }
+
+                System.out.println("\nPackage migration recipe completed successfully!");
             } catch (Exception e) {
                 System.err.println("\nMigration failed: " + e.getMessage());
                 return 1;
+            } finally {
+                if (tempDir != null) {
+                    try (Stream<Path> stream = Files.list(tempDir)) {
+                        stream.forEach(p -> {
+                            try { Files.deleteIfExists(p); } catch (Exception ignored) { }
+                        });
+                    }
+                    Files.deleteIfExists(tempDir);
+                }
             }
 
             return 0;
