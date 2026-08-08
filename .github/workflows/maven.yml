@@ -22,7 +22,7 @@ jobs:
       - name: Build, lint and test with Maven
         run: ./mvnw -B -ntp verify --file pom.xml
       - name: Upload JaCoCo coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: jacoco-report
