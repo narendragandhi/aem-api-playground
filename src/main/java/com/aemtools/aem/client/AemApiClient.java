@@ -227,6 +227,7 @@ public class AemApiClient {
 
     public boolean delete(String path) throws IOException {
         HttpDelete request = new HttpDelete(buildUrl(path));
+        applyAuth(request);
         try (CloseableHttpResponse response = httpClient.execute(request)) {
             logAudit("DELETE", path, response.getCode());
             return response.getCode() >= 200 && response.getCode() < 300;
@@ -235,8 +236,13 @@ public class AemApiClient {
 
     public byte[] download(String path) throws IOException {
         HttpGet request = new HttpGet(buildUrl(path));
+        applyAuth(request);
         try (CloseableHttpResponse response = httpClient.execute(request)) {
             logAudit("DOWNLOAD", path, response.getCode());
+            int code = response.getCode();
+            if (code < 200 || code >= 300) {
+                throw new IOException("HTTP " + code + " while downloading " + path);
+            }
             return response.getEntity().getContent().readAllBytes();
         }
     }
@@ -245,6 +251,73 @@ public class AemApiClient {
         HttpPost request = new HttpPost(buildUrl(path));
         request.setEntity(new ByteArrayEntity(data, ContentType.create(contentType)));
         return execute(request);
+    }
+
+    /**
+     * A raw HTTP response carrying the status code and the body as a string.
+     * Used for endpoints that return XML or other non-JSON payloads.
+     */
+    public record RawResponse(int statusCode, String body) {
+        public boolean isSuccess() {
+            return statusCode >= 200 && statusCode < 300;
+        }
+    }
+
+    /**
+     * Executes a POST and returns the raw response body without JSON parsing.
+     * The PackMgr service.jsp endpoints return XML and must not be parsed as JSON.
+     */
+    public RawResponse postRaw(String path) throws IOException {
+        HttpPost request = new HttpPost(buildUrl(path));
+        applyAuth(request);
+        request.setHeader("Accept", "text/xml, application/xml, application/json, */*");
+        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            String body = readBody(response);
+            logAudit("POST", path, response.getCode());
+            return new RawResponse(response.getCode(), body);
+        }
+    }
+
+    /**
+     * Uploads a file using a multipart/form-data body. The PackMgr upload
+     * endpoint expects a part named {@code file}, not a raw byte body.
+     *
+     * @return the raw response body (XML for PackMgr)
+     */
+    public String uploadMultipart(String path, String fieldName, String fileName, byte[] data) throws IOException {
+        String boundary = "------------------------" + Long.toHexString(System.nanoTime());
+        HttpPost request = new HttpPost(buildUrl(path));
+        applyAuth(request);
+
+        String prefix = "--" + boundary + "\r\n"
+            + "Content-Disposition: form-data; name=\"" + fieldName + "\"; filename=\"" + fileName + "\"\r\n"
+            + "Content-Type: application/zip\r\n\r\n";
+        String suffix = "\r\n--" + boundary + "--\r\n";
+        byte[] head = prefix.getBytes(StandardCharsets.UTF_8);
+        byte[] tail = suffix.getBytes(StandardCharsets.UTF_8);
+        byte[] body = new byte[head.length + data.length + tail.length];
+        System.arraycopy(head, 0, body, 0, head.length);
+        System.arraycopy(data, 0, body, head.length, data.length);
+        System.arraycopy(tail, 0, body, head.length + data.length, tail.length);
+
+        request.setHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+        request.setEntity(new ByteArrayEntity(body, null));
+        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            String responseBody = readBody(response);
+            logAudit("UPLOAD", path, response.getCode());
+            return responseBody;
+        }
+    }
+
+    private String readBody(CloseableHttpResponse response) throws IOException {
+        if (response.getEntity() == null) {
+            return "";
+        }
+        try {
+            return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+        } catch (org.apache.hc.core5.http.ParseException e) {
+            throw new IOException("Failed to read response body", e);
+        }
     }
 
     public JsonNode move(String sourcePath, String destPath) throws IOException {

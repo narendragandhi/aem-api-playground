@@ -116,7 +116,14 @@ public class AssetsApi {
         
         try {
             JsonNode response = client.post(url, folderRequest);
-            return parseFolder(response);
+            Folder folder = parseFolder(response);
+            // POST responses are status-only; fill in what was actually created.
+            if (folder.getName() == null || folder.getName().isEmpty()) {
+                folder.setName(folderName);
+                folder.setTitle(title != null ? title : folderName);
+                folder.setPath(normalizedPath + "/" + folderName);
+            }
+            return folder;
         } catch (Exception e) {
             throw new IOException("Failed to create folder: " + e.getMessage(), e);
         }

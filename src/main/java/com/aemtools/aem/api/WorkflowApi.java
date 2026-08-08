@@ -48,7 +48,15 @@ public class WorkflowApi {
 
         JsonNode response = client.get(WORKFLOW_MODELS_PATH + ".json");
 
-        if (response.isObject()) {
+        if (response.isArray()) {
+            // AEM returns a flat list of {"uri": "/var/workflow/models/..."} entries.
+            for (JsonNode entry : response) {
+                String uri = entry.path("uri").asText();
+                if (!uri.isEmpty()) {
+                    models.add(parseWorkflowModelWithDetail(uri));
+                }
+            }
+        } else if (response.isObject()) {
             response.fields().forEachRemaining(entry -> {
                 String key = entry.getKey();
                 JsonNode node = entry.getValue();
@@ -64,6 +72,25 @@ public class WorkflowApi {
         }
 
         return models;
+    }
+
+    private WorkflowModel parseWorkflowModelWithDetail(String uri) {
+        try {
+            JsonNode detail = client.get(uri + ".json");
+            WorkflowModel model = parseWorkflowModel(detail, uri);
+            if (model.getTitle() != null && !model.getTitle().isEmpty()) {
+                return model;
+            }
+        } catch (IOException e) {
+            // Fall through to a uri-derived model if the detail request fails.
+        }
+
+        WorkflowModel model = new WorkflowModel();
+        model.setPath(uri);
+        model.setId(uri);
+        String name = uri.substring(uri.lastIndexOf('/') + 1);
+        model.setTitle(name.replace('_', ' ').replace('-', ' ').trim());
+        return model;
     }
 
     /**

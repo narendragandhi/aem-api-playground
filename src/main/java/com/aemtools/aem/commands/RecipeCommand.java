@@ -3,6 +3,7 @@ package com.aemtools.aem.commands;
 import com.aemtools.aem.CliFlags;
 import com.aemtools.aem.api.AssetsApi;
 import com.aemtools.aem.api.PackagesApi;
+import com.aemtools.aem.api.PackagesApi.Package;
 import com.aemtools.aem.api.PagesApi;
 import com.aemtools.aem.api.ReplicationApi;
 import com.aemtools.aem.api.TagsApi;
@@ -339,11 +340,6 @@ public class RecipeCommand implements Callable<Integer> {
                 defaultValue = "my_packages")
         private String group;
 
-        @Option(names = {"-s", "--source"},
-                description = "Source environment name (not currently used, uses active env)",
-                required = false)
-        private String sourceEnv;
-
         @Option(names = {"-t", "--target-url"},
                 description = "Target AEM URL",
                 required = true)
@@ -401,17 +397,18 @@ public class RecipeCommand implements Callable<Integer> {
                 System.out.println("Step 2: Uploading package to target [" + targetUrl + "]...");
                 AemApiClient targetClient = new AemApiClient().withTarget(targetUrl, authHeader);
                 PackagesApi targetApi = new PackagesApi(targetClient);
-                targetApi.upload(pkgPath);
-                System.out.println("  Uploaded: " + name + ".zip");
+                Package uploaded = targetApi.upload(pkgPath);
+                System.out.println("  Uploaded: " + uploaded.getGroup() + "/" + uploaded.getName() + ".zip");
 
                 if (install) {
                     System.out.println("Step 3: Installing package on target...");
-                    boolean installed = targetApi.install(group, name);
+                    boolean installed = targetApi.install(uploaded.getGroup(), uploaded.getName());
                     if (!installed) {
-                        System.err.println("  Warning: server reported install failure for " + group + ":" + name);
+                        System.err.println("  Warning: server reported install failure for "
+                            + uploaded.getGroup() + ":" + uploaded.getName());
                         return 1;
                     }
-                    System.out.println("  Installed: " + group + ":" + name);
+                    System.out.println("  Installed: " + uploaded.getGroup() + ":" + uploaded.getName());
                 }
 
                 System.out.println("\nPackage migration recipe completed successfully!");

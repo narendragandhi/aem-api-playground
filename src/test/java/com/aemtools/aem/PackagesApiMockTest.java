@@ -75,10 +75,14 @@ class PackagesApiMockTest {
     @Test
     void testGetParsesPackage() throws IOException {
         ObjectNode response = mapper.createObjectNode();
-        response.put("path", "/etc/packages/myg/g/n.zip");
-        response.put("version", "2.0");
+        ArrayNode results = mapper.createArrayNode();
+        ObjectNode pkgNode = mapper.createObjectNode();
+        pkgNode.put("path", "/etc/packages/g/n.zip");
+        pkgNode.put("version", "2.0");
+        results.add(pkgNode);
+        response.set("results", results);
 
-        when(mockClient.get(eq("/crx/packmgr/g/n.json"))).thenReturn(response);
+        when(mockClient.get(contains("list.jsp"))).thenReturn(response);
 
         Package pkg = packagesApi.get("g", "n");
 
@@ -89,44 +93,41 @@ class PackagesApiMockTest {
 
     @Test
     void testBuildSuccess() throws IOException {
-        ObjectNode response = mapper.createObjectNode();
-        response.put("success", true);
-        when(mockClient.post(contains("service.jsp"), any())).thenReturn(response);
+        when(mockClient.postRaw(contains("cmd=build")))
+            .thenReturn(new AemApiClient.RawResponse(200, "<crx><status code=\"200\">ok</status></crx>"));
 
         assertTrue(packagesApi.build("g", "n"));
-        verify(mockClient).post(eq("/crx/packmgr/service.jsp/g/n"), any());
+        verify(mockClient).postRaw(eq("/crx/packmgr/service.jsp?cmd=build&name=n&group=g"));
     }
 
     @Test
     void testBuildFailure() throws IOException {
-        ObjectNode response = mapper.createObjectNode();
-        response.put("success", false);
-        when(mockClient.post(anyString(), any())).thenReturn(response);
+        when(mockClient.postRaw(anyString()))
+            .thenReturn(new AemApiClient.RawResponse(500, "<crx><status code=\"500\">boom</status></crx>"));
 
         assertFalse(packagesApi.build("g", "n"));
     }
 
     @Test
     void testInstallSuccess() throws IOException {
-        ObjectNode response = mapper.createObjectNode();
-        response.put("success", true);
-        when(mockClient.post(eq("/crx/packmgr/service.jsp/g/n"), any())).thenReturn(response);
+        when(mockClient.postRaw(contains("cmd=inst")))
+            .thenReturn(new AemApiClient.RawResponse(200, "<crx><status code=\"200\">ok</status></crx>"));
 
         assertTrue(packagesApi.install("g", "n"));
     }
 
     @Test
     void testUninstallSuccess() throws IOException {
-        ObjectNode response = mapper.createObjectNode();
-        response.put("success", true);
-        when(mockClient.post(eq("/crx/packmgr/service.jsp/g/n"), any())).thenReturn(response);
+        when(mockClient.postRaw(contains("cmd=uninst")))
+            .thenReturn(new AemApiClient.RawResponse(200, "<crx><status code=\"200\">ok</status></crx>"));
 
         assertTrue(packagesApi.uninstall("g", "n"));
     }
 
     @Test
     void testDeleteCallsClient() throws IOException {
-        when(mockClient.delete(eq("/crx/packmgr/g/n.json"))).thenReturn(true);
+        when(mockClient.postRaw(contains("cmd=rm")))
+            .thenReturn(new AemApiClient.RawResponse(200, "<crx><status code=\"200\">ok</status></crx>"));
 
         assertTrue(packagesApi.delete("g", "n"));
     }
@@ -136,26 +137,24 @@ class PackagesApiMockTest {
         Path zip = tempDir.resolve("pkg.zip");
         Files.write(zip, new byte[]{1, 2, 3, 4});
 
-        ObjectNode response = mapper.createObjectNode();
-        response.put("success", true);
-        ObjectNode pkgNode = mapper.createObjectNode();
-        pkgNode.put("path", "/etc/packages/myg/g/pkg.zip");
-        response.set("package", pkgNode);
+        String xml = "<crx><response><data><package>"
+            + "<group>temporary</group><name>pack_abc</name><version>1.0</version><size>123</size>"
+            + "</package></data><status code=\"200\">ok</status></response></crx>";
 
-        when(mockClient.upload(contains("cmd=upload"), any(byte[].class), eq("application/zip")))
-            .thenReturn(response);
+        when(mockClient.uploadMultipart(contains("cmd=upload"), eq("file"), anyString(), any(byte[].class)))
+            .thenReturn(xml);
 
         Package pkg = packagesApi.upload(zip);
 
-        assertEquals("g", pkg.getGroup());
-        assertEquals("pkg", pkg.getName());
+        assertEquals("temporary", pkg.getGroup());
+        assertEquals("pack_abc", pkg.getName());
+        assertEquals("1.0", pkg.getVersion());
     }
 
     @Test
     void testUploadFailureThrows() throws IOException {
-        ObjectNode response = mapper.createObjectNode();
-        response.put("success", false);
-        when(mockClient.upload(anyString(), any(byte[].class), anyString())).thenReturn(response);
+        when(mockClient.uploadMultipart(anyString(), anyString(), anyString(), any(byte[].class)))
+            .thenReturn("<crx><status code=\"500\">Given archive is not a content package</status></crx>");
 
         assertThrows(IOException.class, () -> packagesApi.upload(new byte[]{1}, "p.zip"));
     }
@@ -163,7 +162,7 @@ class PackagesApiMockTest {
     @Test
     void testDownloadWritesFile() throws IOException {
         byte[] data = new byte[]{10, 20, 30};
-        when(mockClient.download(eq("/crx/packmgr/g/n.zip"))).thenReturn(data);
+        when(mockClient.download(eq("/crx/packmgr/service.jsp?cmd=get&name=n&group=g"))).thenReturn(data);
 
         Path dest = tempDir.resolve("n.zip");
         assertTrue(packagesApi.download("g", "n", dest));

@@ -40,69 +40,75 @@ public class PackagesApi {
     }
 
     public Package get(String group, String name) throws IOException {
-        String path = "/crx/packmgr/" + group + "/" + name + ".json";
+        String path = "/crx/packmgr/list.jsp?filter=" + encode(group) + ":" + encode(name);
         JsonNode response = client.get(path);
-        return parsePackage(response);
+
+        if (response.has("results")) {
+            ArrayNode results = (ArrayNode) response.get("results");
+            for (JsonNode pkgNode : results) {
+                Package pkg = parsePackage(pkgNode);
+                if (group.equals(pkg.getGroup()) && name.equals(pkg.getName())) {
+                    return pkg;
+                }
+            }
+        }
+
+        throw new IOException("Package not found: " + group + ":" + name);
     }
 
     public boolean build(String group, String name) throws IOException {
-        ObjectNode request = mapper.createObjectNode();
-        request.put("cmd", "build");
-        
-        String path = "/crx/packmgr/service.jsp/" + group + "/" + name;
-        JsonNode response = client.post(path, request);
-        
-        return response.has("success") && response.get("success").asBoolean();
+        AemApiClient.RawResponse response = runServiceCmd("build", group, name);
+        return response.isSuccess();
     }
 
     public boolean install(String group, String name) throws IOException {
-        ObjectNode request = mapper.createObjectNode();
-        request.put("cmd", "install");
-        
-        String path = "/crx/packmgr/service.jsp/" + group + "/" + name;
-        JsonNode response = client.post(path, request);
-        
-        return response.has("success") && response.get("success").asBoolean();
+        AemApiClient.RawResponse response = runServiceCmd("inst", group, name);
+        return response.isSuccess();
     }
 
     public boolean uninstall(String group, String name) throws IOException {
-        ObjectNode request = mapper.createObjectNode();
-        request.put("cmd", "uninstall");
-        
-        String path = "/crx/packmgr/service.jsp/" + group + "/" + name;
-        JsonNode response = client.post(path, request);
-        
-        return response.has("success") && response.get("success").asBoolean();
+        AemApiClient.RawResponse response = runServiceCmd("uninst", group, name);
+        return response.isSuccess();
     }
 
     public boolean delete(String group, String name) throws IOException {
-        String path = "/crx/packmgr/" + group + "/" + name + ".json";
-        return client.delete(path);
+        AemApiClient.RawResponse response = runServiceCmd("rm", group, name);
+        return response.isSuccess();
     }
 
     public Package upload(Path zipPath) throws IOException {
         byte[] data = java.nio.file.Files.readAllBytes(zipPath);
         String fileName = zipPath.getFileName().toString();
-        
+
         return upload(data, fileName);
     }
 
     public Package upload(byte[] zipData, String fileName) throws IOException {
         String path = "/crx/packmgr/service.jsp?cmd=upload";
-        
-        JsonNode response = client.upload(path, zipData, "application/zip");
-        
-        if (response.has("success") && response.get("success").asBoolean()) {
-            return parsePackage(response.path("package"));
+
+        String responseBody = client.uploadMultipart(path, "file", fileName, zipData);
+
+        String status = statusCode(responseBody);
+        if (status.isEmpty() || !status.startsWith("2")) {
+            String message = xmlTag(responseBody, "status");
+            throw new IOException("Upload failed: " + (message.isEmpty() ? responseBody.trim() : message));
         }
-        
-        throw new IOException("Upload failed: " + response.toString());
+
+        Package pkg = new Package();
+        pkg.setGroup(xmlTag(responseBody, "group"));
+        pkg.setName(xmlTag(responseBody, "name"));
+        String version = xmlTag(responseBody, "version");
+        pkg.setVersion(version);
+        pkg.setSize(parseSize(xmlTag(responseBody, "size")));
+        String group = pkg.getGroup().isEmpty() ? "temporary" : pkg.getGroup();
+        pkg.setPath("/etc/packages/" + group + "/" + pkg.getName() + ".zip");
+        return pkg;
     }
 
     public boolean download(String group, String name, Path destPath) throws IOException {
-        String path = "/crx/packmgr/" + group + "/" + name + ".zip";
+        String path = "/crx/packmgr/service.jsp?cmd=get&name=" + encode(name) + "&group=" + encode(group);
         byte[] data = client.download(path);
-        
+
         java.nio.file.Files.write(destPath, data);
         return true;
     }
@@ -111,11 +117,42 @@ public class PackagesApi {
         ObjectNode request = mapper.createObjectNode();
         request.put("cmd", "recreate");
         request.put("filter", filterXml);
-        
+
         String path = "/crx/packmgr/service.jsp/" + group + "/" + name;
         JsonNode response = client.post(path, request);
-        
+
         return response.has("success") && response.get("success").asBoolean();
+    }
+
+    private AemApiClient.RawResponse runServiceCmd(String cmd, String group, String name) throws IOException {
+        String path = "/crx/packmgr/service.jsp?cmd=" + cmd
+            + "&name=" + encode(name)
+            + "&group=" + encode(group);
+        return client.postRaw(path);
+    }
+
+    private static String encode(String value) throws IOException {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String xmlTag(String body, String tag) {
+        java.util.regex.Matcher matcher =
+            java.util.regex.Pattern.compile("<" + tag + "[^>]*>([^<]*)</" + tag + "[^>]*>").matcher(body);
+        return matcher.find() ? matcher.group(1).trim() : "";
+    }
+
+    private static String statusCode(String body) {
+        java.util.regex.Matcher matcher =
+            java.util.regex.Pattern.compile("<status[^>]*code=\"(\\d+)\"").matcher(body);
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    private static long parseSize(String value) {
+        try {
+            return value.isEmpty() ? 0 : Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private Package parsePackage(JsonNode node) {
