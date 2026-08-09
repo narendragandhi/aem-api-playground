@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.mcp.json.example` template and README registration snippets for
   Claude Desktop, Claude Code CLI, and Cursor, including running this
   server side by side with Adobe's hosted AEM MCP server.
+- `AemStudioGuiInteractionTest` driving the real window: every sidebar
+  entry must switch the CardLayout to the matching panel. `GuiInitializationTest`
+  now also covers `SitesPanel` and `PackageManagerPanel`.
 
 ### Changed
 - Dependencies updated to current stable releases: Jackson 2.22.1, HttpClient5

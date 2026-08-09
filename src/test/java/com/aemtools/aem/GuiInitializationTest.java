@@ -23,6 +23,8 @@ public class GuiInitializationTest {
             // Test individual panels
             assertNotNull(new EnvPanel(), "EnvPanel should initialize");
             assertNotNull(new ContentBrowserPanel(), "ContentBrowserPanel should initialize");
+            assertNotNull(new SitesPanel(), "SitesPanel should initialize");
+            assertNotNull(new PackageManagerPanel(), "PackageManagerPanel should initialize");
             assertNotNull(new AgentPanel(), "AgentPanel should initialize");
             assertNotNull(new GraphQLPanel(), "GraphQLPanel should initialize");
             assertNotNull(new WorkflowPanel(), "WorkflowPanel should initialize");
