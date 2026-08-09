@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "aem-local": {
+      "command": "java",
+      "args": ["-jar", "/absolute/path/to/aem-mcp-server-1.0.0.jar"]
+    },
+    "aem-adobe": {
+      "url": "https://mcp.adobeaemcloud.com/adobe/mcp/aem",
+      "type": "oauth"
+    }
+  }
+}

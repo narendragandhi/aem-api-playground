@@ -11,6 +11,8 @@ import com.aemtools.aem.api.UsersApi;
 import com.aemtools.aem.api.WorkflowApi;
 import com.aemtools.aem.client.AemApiClient;
 import com.aemtools.aem.config.ConfigManager;
+import com.aemtools.aem.recipes.RecipeEngine;
+import com.aemtools.aem.recipes.RecipeEngine.RecipeResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -18,6 +20,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -48,8 +53,12 @@ public class AemMcpServer {
   private PackagesApi packagesApi;
 
   public AemMcpServer() {
-    this.out = new PrintWriter(System.out, true);
-    this.in = new BufferedReader(new InputStreamReader(System.in));
+    this(new InputStreamReader(System.in), new PrintWriter(System.out, true));
+  }
+
+  AemMcpServer(java.io.Reader reader, PrintWriter writer) {
+    this.in = new BufferedReader(reader);
+    this.out = writer;
   }
 
   public static void main(String[] args) {
@@ -347,6 +356,77 @@ public class AemMcpServer {
             "name", prop("string", "Package name", true)
         )));
 
+    tools.add(buildTool("aem_packages_get", "Get package details",
+        Map.of(
+            "group", prop("string", "Package group", true),
+            "name", prop("string", "Package name", true)
+        )));
+
+    tools.add(buildTool("aem_packages_uninstall", "Uninstall a package",
+        Map.of(
+            "group", prop("string", "Package group", true),
+            "name", prop("string", "Package name", true)
+        )));
+
+    tools.add(buildTool("aem_packages_delete", "Delete a package",
+        Map.of(
+            "group", prop("string", "Package group", true),
+            "name", prop("string", "Package name", true)
+        )));
+
+    tools.add(buildTool("aem_packages_upload", "Upload a local .zip package",
+        Map.of("path", prop("string", "Absolute path to the local .zip file", true))));
+
+    tools.add(buildTool("aem_packages_download", "Download a package to a local file",
+        Map.of(
+            "group", prop("string", "Package group", true),
+            "name", prop("string", "Package name", true),
+            "destination", prop("string", "Output directory (default current dir)", false),
+            "fileName", prop("string", "Output file name (default <name>.zip)", false)
+        )));
+
+    // Recipe tools - multi-step automation runbooks not covered by Adobe's hosted MCP
+    tools.add(buildTool("aem_recipe_site_launch", "Launch a new site: create pages and publish",
+        Map.of(
+            "sitePath", prop("string", "Site root path (e.g. /content/mysite)", true),
+            "title", prop("string", "Site title (optional)", false),
+            "template", prop("string", "Page template path (optional)", false),
+            "publish", prop("boolean", "Publish after creation (default true)", false)
+        )));
+
+    tools.add(buildTool("aem_recipe_content_backup", "Backup a content path to a downloaded package",
+        Map.of(
+            "path", prop("string", "Content path to backup", true),
+            "outputDir", prop("string", "Local output directory (default ./backup)", false),
+            "group", prop("string", "Package group (default backups)", false)
+        )));
+
+    tools.add(buildTool("aem_recipe_asset_batch", "Batch upload, tag, and publish local assets",
+        Map.of(
+            "localPath", prop("string", "Local folder containing assets", true),
+            "destPath", prop("string", "AEM DAM destination path", true),
+            "tags", prop("string", "Comma-separated tags (optional)", false),
+            "publish", prop("boolean", "Publish after processing (default true)", false)
+        )));
+
+    tools.add(buildTool("aem_recipe_user_onboard", "Onboard a user: create and add to groups",
+        Map.of(
+            "userId", prop("string", "User ID", true),
+            "password", prop("string", "User password", true),
+            "email", prop("string", "User email (optional)", false),
+            "groups", prop("string", "Comma-separated groups (default contributors)", false)
+        )));
+
+    tools.add(buildTool("aem_recipe_package_migrate", "Migrate a package to another AEM environment",
+        Map.of(
+            "name", prop("string", "Package name", true),
+            "group", prop("string", "Package group (default my_packages)", false),
+            "targetUrl", prop("string", "Target AEM URL", true),
+            "targetAuth", prop("string", "Target Basic Auth (base64 user:pass)", false),
+            "targetToken", prop("string", "Target Bearer access token", false),
+            "install", prop("boolean", "Install after upload (default true)", false)
+        )));
+
     return Map.of("tools", tools);
   }
 
@@ -438,6 +518,16 @@ public class AemMcpServer {
       case "aem_packages_list" -> handlePackagesList(args);
       case "aem_packages_build" -> handlePackagesBuild(args);
       case "aem_packages_install" -> handlePackagesInstall(args);
+      case "aem_packages_get" -> handlePackagesGet(args);
+      case "aem_packages_uninstall" -> handlePackagesUninstall(args);
+      case "aem_packages_delete" -> handlePackagesDelete(args);
+      case "aem_packages_upload" -> handlePackagesUpload(args);
+      case "aem_packages_download" -> handlePackagesDownload(args);
+      case "aem_recipe_site_launch" -> handleRecipeSiteLaunch(args);
+      case "aem_recipe_content_backup" -> handleRecipeContentBackup(args);
+      case "aem_recipe_asset_batch" -> handleRecipeAssetBatch(args);
+      case "aem_recipe_user_onboard" -> handleRecipeUserOnboard(args);
+      case "aem_recipe_package_migrate" -> handleRecipePackageMigrate(args);
       default -> throw new IllegalArgumentException("Unknown tool: " + name);
     };
 
@@ -977,6 +1067,126 @@ public class AemMcpServer {
     String name = args.path("name").asText();
     boolean success = packagesApi.install(group, name);
     return Map.of("success", success, "group", group, "name", name, "action", "install");
+  }
+
+  private Object handlePackagesGet(JsonNode args) throws Exception {
+    String group = args.path("group").asText();
+    String name = args.path("name").asText();
+    PackagesApi.Package p = packagesApi.get(group, name);
+    return Map.of(
+        "name", nullSafe(p.getName()),
+        "group", nullSafe(p.getGroup()),
+        "version", nullSafe(p.getVersion()),
+        "description", nullSafe(p.getDescription()),
+        "path", nullSafe(p.getPath()),
+        "size", p.getSize(),
+        "installed", p.isInstalled(),
+        "built", p.isBuilt()
+    );
+  }
+
+  private Object handlePackagesUninstall(JsonNode args) throws Exception {
+    String group = args.path("group").asText();
+    String name = args.path("name").asText();
+    boolean success = packagesApi.uninstall(group, name);
+    return Map.of("success", success, "group", group, "name", name, "action", "uninstall");
+  }
+
+  private Object handlePackagesDelete(JsonNode args) throws Exception {
+    String group = args.path("group").asText();
+    String name = args.path("name").asText();
+    boolean success = packagesApi.delete(group, name);
+    return Map.of("success", success, "group", group, "name", name, "action", "delete");
+  }
+
+  private Object handlePackagesUpload(JsonNode args) throws Exception {
+    String path = args.path("path").asText();
+    Path zip = Paths.get(path);
+    if (!Files.exists(zip)) {
+      return Map.of("success", false, "error", "File not found: " + path);
+    }
+    PackagesApi.Package p = packagesApi.upload(zip);
+    return Map.of(
+        "success", true,
+        "name", nullSafe(p.getName()),
+        "group", nullSafe(p.getGroup()),
+        "version", nullSafe(p.getVersion()),
+        "installed", p.isInstalled()
+    );
+  }
+
+  private Object handlePackagesDownload(JsonNode args) throws Exception {
+    String group = args.path("group").asText();
+    String name = args.path("name").asText();
+    String destination = args.path("destination").asText(".");
+    String fileName = args.path("fileName").asText(null);
+    if (fileName == null || fileName.isEmpty()) {
+      fileName = name + ".zip";
+    }
+    Path dir = Paths.get(destination);
+    Files.createDirectories(dir);
+    Path file = dir.resolve(fileName);
+    boolean success = packagesApi.download(group, name, file);
+    return Map.of(
+        "success", success,
+        "group", group,
+        "name", name,
+        "path", file.toAbsolutePath().toString()
+    );
+  }
+
+  private Object handleRecipeSiteLaunch(JsonNode args) throws Exception {
+    String sitePath = args.path("sitePath").asText();
+    String title = args.path("title").asText(null);
+    String template = args.path("template").asText(
+        "/conf/core-components-examples/settings/wcm/templates/content-page");
+    boolean publish = args.path("publish").asBoolean(true);
+    return recipeResult(new RecipeEngine().siteLaunch(sitePath, title, template, publish));
+  }
+
+  private Object handleRecipeContentBackup(JsonNode args) throws Exception {
+    String path = args.path("path").asText();
+    String outputDir = args.path("outputDir").asText("./backup");
+    String group = args.path("group").asText("backups");
+    return recipeResult(new RecipeEngine().contentBackup(path, outputDir, group));
+  }
+
+  private Object handleRecipeAssetBatch(JsonNode args) throws Exception {
+    String localPath = args.path("localPath").asText();
+    String destPath = args.path("destPath").asText();
+    String tags = args.path("tags").asText(null);
+    boolean publish = args.path("publish").asBoolean(true);
+    return recipeResult(new RecipeEngine().assetBatch(localPath, destPath, tags, publish));
+  }
+
+  private Object handleRecipeUserOnboard(JsonNode args) throws Exception {
+    String userId = args.path("userId").asText();
+    String password = args.path("password").asText();
+    String email = args.path("email").asText(null);
+    String groups = args.path("groups").asText("contributors");
+    return recipeResult(new RecipeEngine().userOnboard(userId, password, email, groups));
+  }
+
+  private Object handleRecipePackageMigrate(JsonNode args) throws Exception {
+    String name = args.path("name").asText();
+    String group = args.path("group").asText("my_packages");
+    String targetUrl = args.path("targetUrl").asText(null);
+    String targetAuth = args.path("targetAuth").asText(null);
+    String targetToken = args.path("targetToken").asText(null);
+    boolean install = args.path("install").asBoolean(true);
+    return recipeResult(new RecipeEngine().packageMigrate(
+        name, group, targetUrl, targetAuth, targetToken, install));
+  }
+
+  private ObjectNode recipeResult(RecipeResult result) {
+    ObjectNode node = mapper.createObjectNode();
+    node.put("success", result.success());
+    ArrayNode steps = node.putArray("steps");
+    result.steps().forEach(steps::add);
+    if (result.error() != null) {
+      node.put("error", result.error());
+    }
+    return node;
   }
 
   private String nullSafe(String value) {

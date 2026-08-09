@@ -218,6 +218,45 @@ public class AemApiClient {
         return execute(request);
     }
 
+    /**
+     * POSTs URL-encoded form parameters. The Granite Security authorizables
+     * servlets ({@code /libs/granite/security/post/*}) expect form data rather
+     * than JSON and return HTML, so the raw response is returned untouched.
+     *
+     * @throws IOException if the request fails or the status is not 2xx
+     */
+    public RawResponse postForm(String path, java.util.Map<String, Object> params) throws IOException {
+        HttpPost request = new HttpPost(buildUrl(path));
+        applyAuth(request);
+
+        StringBuilder form = new StringBuilder();
+        for (java.util.Map.Entry<String, Object> entry : params.entrySet()) {
+            if (form.length() > 0) {
+                form.append('&');
+            }
+            form.append(java.net.URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
+                .append('=')
+                .append(java.net.URLEncoder.encode(String.valueOf(entry.getValue()), StandardCharsets.UTF_8));
+        }
+        request.setEntity(new StringEntity(form.toString(), ContentType.APPLICATION_FORM_URLENCODED));
+
+        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            String body = readBody(response);
+            int code = response.getCode();
+            logAudit("POST", path, code);
+            if (code < 200 || code >= 300) {
+                if (code == 404) {
+                    throw new IOException("Not found: " + path);
+                }
+                if (code == 401) {
+                    throw new IOException("Unauthorized: " + path);
+                }
+                throw new IOException("HTTP " + code + ": " + body);
+            }
+            return new RawResponse(code, body);
+        }
+    }
+
     public JsonNode put(String path, Object body) throws IOException {
         HttpPut request = new HttpPut(buildUrl(path));
         String json = objectMapper.writeValueAsString(body);

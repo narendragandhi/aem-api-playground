@@ -205,6 +205,14 @@ These are the only officially supported APIs going forward and are required for
 An MCP (Model Context Protocol) server is included for direct integration with Claude Code.
 This provides Claude with native access to 40+ AEM tools without parsing CLI output.
 
+> **How this complements Adobe's hosted AEM MCP server:** Adobe's MCP runs in the cloud and
+> only reaches AEM as a Cloud Service over Adobe ID OAuth. This server is local/self-hosted
+> and speaks to any AEM — local SDK, 6.5, AMS, or on-prem — using the credentials you already
+> configured via `connect`. It is the extension for the surface Adobe's hosted MCP does not
+> cover: Package Manager (`/crx/packmgr`), classic workflows, replication, and the multi-step
+> automation **recipes** (site launch, content backup, package migration, etc.). Run both
+> side by side in your MCP client.
+
 ### Setup
 
 1. Build the MCP server JAR:
@@ -212,13 +220,54 @@ This provides Claude with native access to 40+ AEM tools without parsing CLI out
 mvn package -DskipTests
 ```
 
-2. Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json`):
+2. Register the server in your MCP client. The JAR path below is an example — use the absolute
+   path to your built `aem-mcp-server-1.0.0.jar`.
+
+**Claude Desktop / Claude Code** (`~/.claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "aem": {
+    "aem-local": {
       "command": "java",
-      "args": ["-jar", "/path/to/aem-mcp-server-1.0.0.jar"]
+      "args": ["-jar", "/absolute/path/to/aem-mcp-server-1.0.0.jar"]
+    }
+  }
+}
+```
+
+**Cursor** (project `.mcp.json`):
+```json
+{
+  "mcpServers": {
+    "aem-local": {
+      "command": "java",
+      "args": ["-jar", "/absolute/path/to/aem-mcp-server-1.0.0.jar"]
+    }
+  }
+}
+```
+A ready-to-copy template is included at `.mcp.json.example` in this repository.
+
+**Claude Code CLI**:
+```bash
+claude mcp add aem-local -- java -jar /absolute/path/to/aem-mcp-server-1.0.0.jar
+```
+
+#### Run both side by side with Adobe's hosted MCP
+
+Register this server alongside Adobe's hosted AEM MCP server in the same client, then let the
+model pick the right one per task — hosted for Cloud Service pages/content, this one for
+PackMgr, classic workflows, and recipes:
+```json
+{
+  "mcpServers": {
+    "aem-local": {
+      "command": "java",
+      "args": ["-jar", "/absolute/path/to/aem-mcp-server-1.0.0.jar"]
+    },
+    "aem-adobe": {
+      "url": "https://mcp.adobeaemcloud.com/adobe/mcp/aem",
+      "type": "oauth"
     }
   }
 }
@@ -243,7 +292,8 @@ java -jar aem-api-1.0.0.jar connect --env dev \
 | **Replication** | `aem_replicate_activate`, `aem_replicate_deactivate`, `aem_replicate_status` |
 | **GraphQL** | `aem_graphql_execute`, `aem_graphql_persisted` |
 | **Pages** | `aem_pages_list`, `aem_pages_get`, `aem_pages_create`, `aem_pages_delete` |
-| **Packages** | `aem_packages_list`, `aem_packages_build`, `aem_packages_install` |
+| **Packages** | `aem_packages_list`, `aem_packages_get`, `aem_packages_build`, `aem_packages_install`, `aem_packages_uninstall`, `aem_packages_delete`, `aem_packages_upload`, `aem_packages_download` |
+| **Recipes** | `aem_recipe_site_launch`, `aem_recipe_content_backup`, `aem_recipe_asset_batch`, `aem_recipe_user_onboard`, `aem_recipe_package_migrate` |
 
 ### Example Usage in Claude Code
 
@@ -252,6 +302,8 @@ Once configured, ask Claude:
 - "Create a new content fragment in /content/dam/myproject"
 - "Publish the page at /content/mysite/en/home"
 - "Show me which users are in the administrators group"
+- "Migrate package my_packages:mysite to http://other-aem:4502 using basic auth <base64>"
+- "Back up /content/dam/mysite to ./backup"
 
 ## For Architects
 

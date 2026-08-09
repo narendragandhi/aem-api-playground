@@ -16,6 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the root command.
 - Removed dead Spring-style `application.properties` from a non-Spring CLI.
 - `CliFlagsTest` / `AemApiCliTest` now exercise the real picocli parser.
+- `PackagesApi.parsePackage` derived package `name`/`group` from the ZIP
+  path (e.g. `vanityurls-components-1.0.6`), so `get`/`build`/`install`/
+  `delete`/`download` failed against PackMgr. It now prefers the
+  authoritative `name`/`group` fields returned by `list.jsp`.
+- User/group mutation methods in `UsersApi` sent JSON bodies to the Granite
+  Security authorizables servlets, which expect URL-encoded form data
+  (resulting in 404s). Added `AemApiClient.postForm` and switched all
+  `createUser`/`createGroup`/membership/impersonation writes to it.
+
+### Added
+- `RecipeEngine` — a single source of truth for the five recipes (site
+  launch, content backup, asset batch, user onboarding, package migrate)
+  shared by the CLI, GUI, and MCP server.
+- MCP tools to complete the PackMgr surface: `aem_packages_get`,
+  `aem_packages_uninstall`, `aem_packages_delete`, `aem_packages_upload`,
+  `aem_packages_download`.
+- MCP recipe tools exposing the automation runbooks to AI agents:
+  `aem_recipe_site_launch`, `aem_recipe_content_backup`,
+  `aem_recipe_asset_batch`, `aem_recipe_user_onboard`,
+  `aem_recipe_package_migrate`.
+- `AemMcpServerTest` covering the JSON-RPC handshake, `tools/list`
+  content, error responses, and recipe validation without network.
+- `.mcp.json.example` template and README registration snippets for
+  Claude Desktop, Claude Code CLI, and Cursor, including running this
+  server side by side with Adobe's hosted AEM MCP server.
 
 ### Changed
 - Dependencies updated to current stable releases: Jackson 2.22.1, HttpClient5
@@ -23,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sqlite-jdbc 3.53.2.1, Logback 1.6.1, FlatLaf 3.7.2, and current Maven
   plugin versions (checkstyle 3.6.0, jacoco 0.8.15, surefire 3.5.6, shade
   3.6.2, compiler 3.15.0, exec 3.6.3).
+- `RecipeCommand` delegates execution to the shared `RecipeEngine`; the
+  picocli option surface and mock/dry-run behavior are unchanged, so the
+  CLI and GUI behave identically to before.
 
 ### Added
 - Open-source hygiene: Apache-2.0 `LICENSE`, `CODE_OF_CONDUCT.md`,

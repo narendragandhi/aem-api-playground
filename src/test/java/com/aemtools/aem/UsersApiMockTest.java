@@ -101,13 +101,13 @@ class UsersApiMockTest {
     void testCreateUser() throws IOException {
         ArrayNode hits = mapper.createArrayNode();
         hits.add(userNode("/home/users/j/john", "john", "john@example.com"));
-        when(mockClient.post(contains("authorizables"), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(contains("authorizables"), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
         when(mockClient.get(contains("property.value=john"))).thenReturn(searchResponse(hits));
 
         User user = usersApi.createUser("john", "secret", "john@example.com", "John", "Doe");
 
         assertEquals("john", user.id());
-        verify(mockClient).post(eq("/libs/granite/security/post/authorizables"), any());
+        verify(mockClient).postForm(eq("/libs/granite/security/post/authorizables"), any());
     }
 
     @Test
@@ -115,10 +115,10 @@ class UsersApiMockTest {
         ArrayNode hits = mapper.createArrayNode();
         hits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(anyString())).thenReturn(searchResponse(hits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.deleteUser("john"));
-        verify(mockClient).post(eq("/home/users/j/john"), any());
+        verify(mockClient).postForm(eq("/home/users/j/john"), any());
     }
 
     @Test
@@ -126,12 +126,12 @@ class UsersApiMockTest {
         ArrayNode hits = mapper.createArrayNode();
         hits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(anyString())).thenReturn(searchResponse(hits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         User user = usersApi.updateUser("john", Map.of("email", "new@example.com"));
 
         assertEquals("john", user.id());
-        verify(mockClient).post(eq("/home/users/j/john"), any());
+        verify(mockClient).postForm(eq("/home/users/j/john"), any());
     }
 
     @Test
@@ -139,10 +139,10 @@ class UsersApiMockTest {
         ArrayNode hits = mapper.createArrayNode();
         hits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(anyString())).thenReturn(searchResponse(hits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.changePassword("john", "old", "new"));
-        verify(mockClient).post(eq("/home/users/j/john.rw.userprops.html"), any());
+        verify(mockClient).postForm(eq("/home/users/j/john.rw.userprops.html"), any());
     }
 
     @Test
@@ -150,10 +150,10 @@ class UsersApiMockTest {
         ArrayNode hits = mapper.createArrayNode();
         hits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(anyString())).thenReturn(searchResponse(hits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.setUserEnabled("john", false));
-        verify(mockClient).post(eq("/home/users/j/john"), any());
+        verify(mockClient).postForm(eq("/home/users/j/john"), any());
     }
 
     @Test
@@ -180,7 +180,7 @@ class UsersApiMockTest {
     void testCreateGroup() throws IOException {
         ArrayNode hits = mapper.createArrayNode();
         hits.add(groupNode("/home/groups/e/editors", "editors", "Editors"));
-        when(mockClient.post(contains("authorizables"), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(contains("authorizables"), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
         when(mockClient.get(contains("property.value=editors"))).thenReturn(searchResponse(hits));
 
         Group group = usersApi.createGroup("editors", "Editors");
@@ -193,10 +193,10 @@ class UsersApiMockTest {
         ArrayNode hits = mapper.createArrayNode();
         hits.add(groupNode("/home/groups/e/editors", "editors", "Editors"));
         when(mockClient.get(anyString())).thenReturn(searchResponse(hits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.deleteGroup("editors"));
-        verify(mockClient).post(eq("/home/groups/e/editors"), any());
+        verify(mockClient).postForm(eq("/home/groups/e/editors"), any());
     }
 
     @Test
@@ -243,10 +243,10 @@ class UsersApiMockTest {
         ArrayNode userHits = mapper.createArrayNode();
         userHits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(anyString())).thenReturn(searchResponse(groupHits), searchResponse(userHits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.addUserToGroup("john", "editors"));
-        verify(mockClient).post(eq("/home/groups/e/editors"), any());
+        verify(mockClient).postForm(eq("/home/groups/e/editors"), any());
     }
 
     @Test
@@ -256,10 +256,10 @@ class UsersApiMockTest {
         ArrayNode userHits = mapper.createArrayNode();
         userHits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(anyString())).thenReturn(searchResponse(groupHits), searchResponse(userHits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.removeUserFromGroup("john", "editors"));
-        verify(mockClient).post(eq("/home/groups/e/editors"), any());
+        verify(mockClient).postForm(eq("/home/groups/e/editors"), any());
     }
 
     @Test
@@ -281,11 +281,11 @@ class UsersApiMockTest {
         newGroupHits.add(groupNode("/home/groups/n/new-group", "new-group", "New Group"));
         when(mockClient.get(contains("property.value=old-group"))).thenReturn(searchResponse(oldGroupHits));
         when(mockClient.get(contains("property.value=new-group"))).thenReturn(searchResponse(newGroupHits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.setUserGroups("john", List.of("stay-group", "new-group")));
-        verify(mockClient).post(eq("/home/groups/o/old-group"), any());
-        verify(mockClient).post(eq("/home/groups/n/new-group"), any());
+        verify(mockClient).postForm(eq("/home/groups/o/old-group"), any());
+        verify(mockClient).postForm(eq("/home/groups/n/new-group"), any());
     }
 
     @Test
@@ -312,10 +312,10 @@ class UsersApiMockTest {
         ArrayNode userHits = mapper.createArrayNode();
         userHits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(contains("property.value=john"))).thenReturn(searchResponse(userHits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.allowImpersonation("admin", "john"));
-        verify(mockClient).post(eq("/home/users/j/john"), any());
+        verify(mockClient).postForm(eq("/home/users/j/john"), any());
     }
 
     @Test
@@ -323,9 +323,9 @@ class UsersApiMockTest {
         ArrayNode userHits = mapper.createArrayNode();
         userHits.add(userNode("/home/users/j/john", "john", null));
         when(mockClient.get(contains("property.value=john"))).thenReturn(searchResponse(userHits));
-        when(mockClient.post(anyString(), any())).thenReturn(mapper.createObjectNode());
+        when(mockClient.postForm(anyString(), any())).thenReturn(new AemApiClient.RawResponse(201, "ok"));
 
         assertTrue(usersApi.revokeImpersonation("admin", "john"));
-        verify(mockClient).post(eq("/home/users/j/john"), any());
+        verify(mockClient).postForm(eq("/home/users/j/john"), any());
     }
 }

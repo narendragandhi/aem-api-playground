@@ -110,7 +110,7 @@ public class UsersApi {
             params.put("profile/familyName", familyName);
         }
 
-        JsonNode response = client.post("/libs/granite/security/post/authorizables", params);
+        client.postForm("/libs/granite/security/post/authorizables", params);
 
         logger.info("Created user: {}", userId);
 
@@ -131,7 +131,7 @@ public class UsersApi {
         Map<String, Object> params = new HashMap<>();
         params.put("deleteAuthorizable", "");
 
-        client.post(user.path(), params);
+        client.postForm(user.path(), params);
 
         logger.info("Deleted user: {}", userId);
         return true;
@@ -153,7 +153,7 @@ public class UsersApi {
             params.put("profile/" + entry.getKey(), entry.getValue());
         }
 
-        client.post(user.path(), params);
+        client.postForm(user.path(), params);
 
         logger.info("Updated user: {}", userId);
         return getUser(userId);
@@ -175,7 +175,7 @@ public class UsersApi {
         params.put("rep:password", newPassword);
         params.put("oldPassword", oldPassword);
 
-        client.post(user.path() + ".rw.userprops.html", params);
+        client.postForm(user.path() + ".rw.userprops.html", params);
 
         logger.info("Changed password for user: {}", userId);
         return true;
@@ -195,7 +195,7 @@ public class UsersApi {
         Map<String, Object> params = new HashMap<>();
         params.put("rep:disabled", enabled ? "" : "Account disabled");
 
-        client.post(user.path(), params);
+        client.postForm(user.path(), params);
 
         logger.info("{} user: {}", enabled ? "Enabled" : "Disabled", userId);
         return true;
@@ -273,7 +273,7 @@ public class UsersApi {
             params.put("profile/givenName", givenName);
         }
 
-        client.post("/libs/granite/security/post/authorizables", params);
+        client.postForm("/libs/granite/security/post/authorizables", params);
 
         logger.info("Created group: {}", groupId);
         return getGroup(groupId);
@@ -292,7 +292,7 @@ public class UsersApi {
         Map<String, Object> params = new HashMap<>();
         params.put("deleteAuthorizable", "");
 
-        client.post(group.path(), params);
+        client.postForm(group.path(), params);
 
         logger.info("Deleted group: {}", groupId);
         return true;
@@ -366,7 +366,7 @@ public class UsersApi {
         Map<String, Object> params = new HashMap<>();
         params.put("addMembers", user.path());
 
-        client.post(group.path(), params);
+        client.postForm(group.path(), params);
 
         logger.info("Added user {} to group {}", userId, groupId);
         return true;
@@ -387,7 +387,7 @@ public class UsersApi {
         Map<String, Object> params = new HashMap<>();
         params.put("removeMembers", user.path());
 
-        client.post(group.path(), params);
+        client.postForm(group.path(), params);
 
         logger.info("Removed user {} from group {}", userId, groupId);
         return true;
@@ -464,7 +464,7 @@ public class UsersApi {
         Map<String, Object> params = new HashMap<>();
         params.put("addImpersonators", impersonatorId);
 
-        client.post(targetUser.path(), params);
+        client.postForm(targetUser.path(), params);
 
         logger.info("Allowed {} to impersonate {}", impersonatorId, targetUserId);
         return true;
@@ -484,7 +484,7 @@ public class UsersApi {
         Map<String, Object> params = new HashMap<>();
         params.put("removeImpersonators", impersonatorId);
 
-        client.post(targetUser.path(), params);
+        client.postForm(targetUser.path(), params);
 
         logger.info("Revoked {} impersonation of {}", impersonatorId, targetUserId);
         return true;

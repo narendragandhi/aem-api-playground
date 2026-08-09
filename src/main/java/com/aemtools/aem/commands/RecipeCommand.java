@@ -1,30 +1,18 @@
 package com.aemtools.aem.commands;
 
 import com.aemtools.aem.CliFlags;
-import com.aemtools.aem.api.AssetsApi;
-import com.aemtools.aem.api.PackagesApi;
-import com.aemtools.aem.api.PackagesApi.Package;
-import com.aemtools.aem.api.PagesApi;
-import com.aemtools.aem.api.ReplicationApi;
-import com.aemtools.aem.api.TagsApi;
-import com.aemtools.aem.api.UsersApi;
-import com.aemtools.aem.client.AemApiClient;
+import com.aemtools.aem.recipes.RecipeEngine;
+import com.aemtools.aem.recipes.RecipeEngine.RecipeResult;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Command for executing predefined multi-step recipes.
  * Recipes are complex workflows that combine multiple AEM operations
- * into a single, reusable sequence.
+ * into a single, reusable sequence. The execution logic lives in
+ * {@link RecipeEngine} so the CLI, GUI, and MCP server share one implementation.
  */
 @Command(name = "recipe", description = "Execute predefined multi-step recipes", subcommands = {
     RecipeCommand.SiteLaunchRecipe.class,
@@ -81,34 +69,9 @@ public class RecipeCommand implements Callable<Integer> {
                 return 0;
             }
 
-            AemApiClient client = new AemApiClient();
-            PagesApi pagesApi = new PagesApi(client);
-            ReplicationApi replicationApi = new ReplicationApi(client);
-
-            try {
-                String parentPath = sitePath.substring(0, sitePath.lastIndexOf("/"));
-                String name = sitePath.substring(sitePath.lastIndexOf("/") + 1);
-
-                System.out.println("\nStep 1: Creating site root...");
-                pagesApi.create(parentPath, name, template, title != null ? title : name);
-
-                System.out.println("Step 2: Creating sub-pages...");
-                pagesApi.create(sitePath, "home", template, "Home");
-                pagesApi.create(sitePath, "about", template, "About Us");
-                pagesApi.create(sitePath, "contact", template, "Contact");
-
-                if (publish) {
-                    System.out.println("Step 3: Publishing site structure...");
-                    replicationApi.publish(sitePath, null);
-                }
-
-                System.out.println("\nSite launch recipe completed successfully!");
-            } catch (Exception e) {
-                System.err.println("\nSite launch failed: " + e.getMessage());
-                return 1;
-            }
-
-            return 0;
+            RecipeResult result = new RecipeEngine().siteLaunch(sitePath, title, template, publish);
+            printResult(result);
+            return result.success() ? 0 : 1;
         }
     }
 
@@ -145,48 +108,9 @@ public class RecipeCommand implements Callable<Integer> {
                 return 0;
             }
 
-            AemApiClient client = new AemApiClient();
-            PackagesApi packagesApi = new PackagesApi(client);
-
-            String timestamp = String.valueOf(System.currentTimeMillis());
-            String packageName = "backup_" + path.replace("/", "_").substring(1) + "_" + timestamp;
-
-            try {
-                // Ensure output directory exists
-                Path outPath = Paths.get(outputDir);
-                if (!Files.exists(outPath)) {
-                    Files.createDirectories(outPath);
-                }
-
-                System.out.println("\nStep 1: Creating backup package definition...");
-                // Note: Recreate uses a filter XML. Minimal one for the path:
-                String filterXml = String.format("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                        "<workspaceFilter version=\"1.0\"><filter root=\"%s\"/></workspaceFilter>", path);
-                packagesApi.recreate(group, packageName, filterXml);
-
-                System.out.println("Step 2: Building package...");
-                boolean buildSuccess = packagesApi.build(group, packageName);
-                if (!buildSuccess) {
-                    System.err.println("Error: Package build failed on server.");
-                    return 1;
-                }
-
-                System.out.println("Step 3: Downloading package...");
-                Path localZip = outPath.resolve(packageName + ".zip");
-                packagesApi.download(group, packageName, localZip);
-
-                System.out.println("\nBackup complete! File saved to: " + localZip.toAbsolutePath());
-                
-                // Cleanup? Usually good practice to delete the temporary package on the server
-                // System.out.println("Step 4: Cleaning up temporary package on server...");
-                // packagesApi.delete(group, packageName);
-
-            } catch (Exception e) {
-                System.err.println("\nBackup failed: " + e.getMessage());
-                return 1;
-            }
-
-            return 0;
+            RecipeResult result = new RecipeEngine().contentBackup(path, outputDir, group);
+            printResult(result);
+            return result.success() ? 0 : 1;
         }
     }
 
@@ -228,47 +152,9 @@ public class RecipeCommand implements Callable<Integer> {
                 return 0;
             }
 
-            AemApiClient client = new AemApiClient();
-            AssetsApi assetsApi = new AssetsApi(client);
-            TagsApi tagsApi = new TagsApi(client);
-            ReplicationApi replicationApi = new ReplicationApi(client);
-
-            Path folder = Paths.get(localPath);
-            if (!Files.isDirectory(folder)) {
-                System.err.println("Error: " + localPath + " is not a directory");
-                return 1;
-            }
-
-            List<Path> files;
-            try (Stream<Path> stream = Files.list(folder)) {
-                files = stream.filter(Files::isRegularFile).collect(Collectors.toList());
-            }
-
-            System.out.println("\nFound " + files.size() + " assets to process.");
-
-            for (int i = 0; i < files.size(); i++) {
-                Path file = files.get(i);
-                String fileName = file.getFileName().toString();
-                System.out.println(String.format("  [%d/%d] Processing %s...", i + 1, files.size(), fileName));
-
-                // 1. Upload
-                AssetsApi.Asset asset = assetsApi.uploadFile(destPath, file);
-                String assetPath = destPath + "/" + fileName;
-
-                // 2. Tag
-                if (tags != null) {
-                    List<String> tagList = Arrays.asList(tags.split(","));
-                    tagsApi.applyTags(assetPath, tagList, false);
-                }
-
-                // 3. Publish
-                if (publish) {
-                    replicationApi.publish(assetPath, null);
-                }
-            }
-
-            System.out.println("\nAsset batch complete!");
-            return 0;
+            RecipeResult result = new RecipeEngine().assetBatch(localPath, destPath, tags, publish);
+            printResult(result);
+            return result.success() ? 0 : 1;
         }
     }
 
@@ -304,25 +190,9 @@ public class RecipeCommand implements Callable<Integer> {
                 return 0;
             }
 
-            AemApiClient client = new AemApiClient();
-            UsersApi usersApi = new UsersApi(client);
-
-            System.out.println("\nStep 1: Creating user " + userId + "...");
-            usersApi.createUser(userId, password, email, null, null);
-
-            System.out.println("Step 2: Adding to groups: " + groups + "...");
-            List<String> groupList = Arrays.asList(groups.split(","));
-            for (String groupId : groupList) {
-                try {
-                    usersApi.addUserToGroup(userId, groupId.trim());
-                    System.out.println("  Added to " + groupId.trim());
-                } catch (Exception e) {
-                    System.err.println("  Failed to add to " + groupId + ": " + e.getMessage());
-                }
-            }
-
-            System.out.println("\nUser onboarding recipe completed successfully!");
-            return 0;
+            RecipeResult result = new RecipeEngine().userOnboard(userId, password, email, groups);
+            printResult(result);
+            return result.success() ? 0 : 1;
         }
     }
 
@@ -370,63 +240,17 @@ public class RecipeCommand implements Callable<Integer> {
                 return 0;
             }
 
-            if ((targetAuth == null || targetAuth.isEmpty())
-                    && (targetToken == null || targetToken.isEmpty())) {
-                System.err.println("Error: --target-auth or --target-token is required");
-                return 1;
-            }
+            RecipeResult result = new RecipeEngine().packageMigrate(
+                name, group, targetUrl, targetAuth, targetToken, install);
+            printResult(result);
+            return result.success() ? 0 : 1;
+        }
+    }
 
-            String authHeader = null;
-            if (targetToken != null && !targetToken.isEmpty()) {
-                authHeader = targetToken.startsWith("Bearer ") ? targetToken : "Bearer " + targetToken;
-            } else {
-                authHeader = targetAuth.startsWith("Basic ") ? targetAuth : "Basic " + targetAuth;
-            }
-
-            Path tempDir = null;
-            try {
-                tempDir = Files.createTempDirectory("aem-pkg-migrate-");
-                Path pkgPath = tempDir.resolve(name + ".zip");
-
-                System.out.println("\nStep 1: Downloading package from current environment...");
-                AemApiClient sourceClient = new AemApiClient();
-                PackagesApi sourceApi = new PackagesApi(sourceClient);
-                sourceApi.download(group, name, pkgPath);
-                System.out.println("  Downloaded to: " + pkgPath.toAbsolutePath());
-
-                System.out.println("Step 2: Uploading package to target [" + targetUrl + "]...");
-                AemApiClient targetClient = new AemApiClient().withTarget(targetUrl, authHeader);
-                PackagesApi targetApi = new PackagesApi(targetClient);
-                Package uploaded = targetApi.upload(pkgPath);
-                System.out.println("  Uploaded: " + uploaded.getGroup() + "/" + uploaded.getName() + ".zip");
-
-                if (install) {
-                    System.out.println("Step 3: Installing package on target...");
-                    boolean installed = targetApi.install(uploaded.getGroup(), uploaded.getName());
-                    if (!installed) {
-                        System.err.println("  Warning: server reported install failure for "
-                            + uploaded.getGroup() + ":" + uploaded.getName());
-                        return 1;
-                    }
-                    System.out.println("  Installed: " + uploaded.getGroup() + ":" + uploaded.getName());
-                }
-
-                System.out.println("\nPackage migration recipe completed successfully!");
-            } catch (Exception e) {
-                System.err.println("\nMigration failed: " + e.getMessage());
-                return 1;
-            } finally {
-                if (tempDir != null) {
-                    try (Stream<Path> stream = Files.list(tempDir)) {
-                        stream.forEach(p -> {
-                            try { Files.deleteIfExists(p); } catch (Exception ignored) { }
-                        });
-                    }
-                    Files.deleteIfExists(tempDir);
-                }
-            }
-
-            return 0;
+    private static void printResult(RecipeResult result) {
+        result.steps().forEach(System.out::println);
+        if (!result.success() && result.error() != null) {
+            System.err.println("Error: " + result.error());
         }
     }
 }

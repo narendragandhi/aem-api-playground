@@ -157,21 +157,30 @@ public class PackagesApi {
 
     private Package parsePackage(JsonNode node) {
         Package pkg = new Package();
-        
+
         String path = node.path("path").asText();
-        String[] parts = path.replace(".zip", "").split("/");
-        if (parts.length >= 3) {
-            pkg.setGroup(parts[parts.length - 2]);
-            pkg.setName(parts[parts.length - 1]);
+        String name = node.path("name").asText();
+        String group = node.path("group").asText();
+        if (name.isEmpty() || group.isEmpty()) {
+            String[] parts = path.replace(".zip", "").split("/");
+            if (parts.length >= 3) {
+                if (group.isEmpty()) {
+                    group = parts[parts.length - 2];
+                }
+                if (name.isEmpty()) {
+                    name = parts[parts.length - 1];
+                }
+            }
         }
-        
         pkg.setPath(path);
+        pkg.setGroup(group);
+        pkg.setName(name);
         pkg.setVersion(node.path("version").asText());
         pkg.setDescription(node.path("description").asText());
         pkg.setSize(node.path("size").asLong(0));
         pkg.setInstalled(node.path("installed").asBoolean(false));
         pkg.setBuilt(node.path("lastBuilt").asText() != null && !node.path("lastBuilt").asText().isEmpty());
-        
+
         return pkg;
     }
 
