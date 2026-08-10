@@ -19,7 +19,7 @@
         <picocli.version>4.7.7</picocli.version>
         <jline.version>3.30.16</jline.version>
         <jackson.version>2.22.1</jackson.version>
-        <httpclient.version>5.6.3</httpclient.version>
+        <httpclient.version>5.6.4</httpclient.version>
     </properties>
 
     <dependencies>
