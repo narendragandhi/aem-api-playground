@@ -2,8 +2,16 @@ package com.aemtools.aem.gui;
 
 import org.junit.jupiter.api.Test;
 
-import javax.swing.*;
-import java.awt.*;
+import javax.swing.JFrame;
+import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.ListModel;
+import javax.swing.SwingUtilities;
+import java.awt.CardLayout;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Frame;
+import java.awt.GraphicsEnvironment;
 import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,16 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Drives the real AEM API Studio window: builds the frame, clicks through every
- * sidebar entry, and asserts the corresponding CardLayout card is displayed.
+ * sidebar entry, and asserts the matching CardLayout card is displayed.
+ *
+ * <p>Sidebar index maps to card index 1:1 because both are driven by the same
+ * {@link StudioView} registry, so this test auto-covers any newly added view.</p>
  */
 public class AemStudioGuiInteractionTest {
-
-    private static final String[] SIDEBAR = {
-        "Home", "Environments", "Content Browser", "Sites & Pages", "Package Manager",
-        "GraphQL Editor", "Workflow Monitor", "Automation Recipes", "AI Agent", "Audit & Cache"
-    };
-
-    private static final int[] SIDEBAR_TO_CARD = {0, 1, 2, 3, 4, 6, 7, 9, 5, 8};
 
     @Test
     public void testSidebarDrivesAllCards() throws Exception {
@@ -39,26 +43,28 @@ public class AemStudioGuiInteractionTest {
 
                 JList<String> sidebar = findSidebarList(frame);
                 assertNotNull(sidebar, "Sidebar list not found");
-                assertEquals(SIDEBAR.length, sidebar.getModel().getSize(), "Sidebar entry count mismatch");
+                assertTrue(sidebar.getModel().getSize() > 0, "Sidebar is empty");
 
                 JPanel contentPanel = findCardLayoutPanel(frame);
                 assertNotNull(contentPanel, "CardLayout content panel not found");
-                assertEquals(10, contentPanel.getComponentCount(), "Card count mismatch");
 
-                for (int i = 0; i < SIDEBAR.length; i++) {
+                int count = sidebar.getModel().getSize();
+                assertEquals(count, contentPanel.getComponentCount(), "Sidebar/card count mismatch");
+
+                for (int i = 0; i < count; i++) {
                     sidebar.setSelectedIndex(i);
-                    assertEquals(SIDEBAR[i], sidebar.getSelectedValue(), "Sidebar selection failed at index " + i);
+                    assertEquals(sidebar.getModel().getElementAt(i), sidebar.getSelectedValue(),
+                        "Sidebar selection failed at index " + i);
+                    assertTrue(contentPanel.getComponent(i).isShowing(),
+                        "Card at index " + i + " ('" + sidebar.getModel().getElementAt(i) + "') is not showing");
 
-                    Component expectedCard = contentPanel.getComponent(SIDEBAR_TO_CARD[i]);
-                    assertTrue(expectedCard.isShowing(), "Card for '" + SIDEBAR[i] + "' is not showing");
-
-                    for (int j = 0; j < contentPanel.getComponentCount(); j++) {
-                        boolean shouldShow = j == SIDEBAR_TO_CARD[i];
+                    for (int j = 0; j < count; j++) {
+                        boolean shouldShow = j == i;
                         assertEquals(shouldShow, contentPanel.getComponent(j).isShowing(),
-                            "Unexpected visible card when '" + SIDEBAR[i] + "' selected (index " + j + ")");
+                            "Unexpected visible card when index " + i + " selected (card " + j + ")");
                     }
                 }
-                System.out.println("All " + SIDEBAR.length + " sidebar entries switch to the correct card");
+                System.out.println("All " + count + " sidebar entries switch to the correct card");
             } finally {
                 frame.dispose();
             }

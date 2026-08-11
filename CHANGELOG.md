@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RecipeCommand` delegates execution to the shared `RecipeEngine`; the
   picocli option surface and mock/dry-run behavior are unchanged, so the
   CLI and GUI behave identically to before.
+- GUI navigation is now driven by a `StudioView` registry: the sidebar and
+  the CardLayout derive from the same ordered list, so sidebar index maps to
+  card index 1:1 and the label-to-card if/else chain is gone. New views are
+  registered in one line via `AemStudioGui.addView(label, panel)`.
 
 ### Added
 - Open-source hygiene: Apache-2.0 `LICENSE`, `CODE_OF_CONDUCT.md`,

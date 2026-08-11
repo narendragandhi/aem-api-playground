@@ -2,12 +2,28 @@ package com.aemtools.aem.gui;
 
 import com.aemtools.aem.config.ConfigManager;
 import com.formdev.flatlaf.FlatDarkLaf;
-import com.formdev.flatlaf.FlatLightLaf;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListModel;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 
 /**
  * AEM API Studio - Native Java GUI for AEM API Playground.
@@ -17,18 +33,9 @@ public class AemStudioGui {
     private JFrame frame;
     private JPanel contentPanel;
     private CardLayout cardLayout;
-    
-    private HomePanel homePanel;
-    private EnvPanel envPanel;
-    private ContentBrowserPanel contentBrowserPanel;
-    private SitesPanel sitesPanel;
-    private PackageManagerPanel packageManagerPanel;
-    private AgentPanel agentPanel;
-    private GraphQLPanel graphQLPanel;
-    private WorkflowPanel workflowPanel;
-    private AuditPanel auditPanel;
-    private RecipePanel recipePanel;
+    private DefaultListModel<String> sidebarModel;
     private ConsolePanel consolePanel;
+    private final List<StudioView> views = new ArrayList<>();
 
     public AemStudioGui() {
         initComponents();
@@ -41,122 +48,104 @@ public class AemStudioGui {
         frame.setMinimumSize(new Dimension(1024, 768));
         frame.setLocationRelativeTo(null);
 
-        // Sidebar
-        JPanel sidebar = createSidebar();
-        
-        // Content Area
         cardLayout = new CardLayout();
         contentPanel = new JPanel(cardLayout);
-        
-        homePanel = new HomePanel();
-        envPanel = new EnvPanel();
-        contentBrowserPanel = new ContentBrowserPanel();
-        sitesPanel = new SitesPanel();
-        packageManagerPanel = new PackageManagerPanel();
-        agentPanel = new AgentPanel();
-        graphQLPanel = new GraphQLPanel();
-        workflowPanel = new WorkflowPanel();
-        auditPanel = new AuditPanel();
-        recipePanel = new RecipePanel();
-        
-        contentPanel.add(homePanel, "HOME");
-        contentPanel.add(envPanel, "ENV");
-        contentPanel.add(contentBrowserPanel, "BROWSER");
-        contentPanel.add(sitesPanel, "SITES");
-        contentPanel.add(packageManagerPanel, "PACKAGES");
-        contentPanel.add(agentPanel, "AGENT");
-        contentPanel.add(graphQLPanel, "GRAPHQL");
-        contentPanel.add(workflowPanel, "WORKFLOW");
-        contentPanel.add(auditPanel, "AUDIT");
-        contentPanel.add(recipePanel, "RECIPE");
+        sidebarModel = new DefaultListModel<>();
 
-        // Console at bottom
-        consolePanel = new ConsolePanel();
-        consolePanel.setPreferredSize(new Dimension(0, 200));
-        
-        // Split: (Sidebar | Content) over Console
+        registerViews();
+
+        JPanel sidebar = createSidebar();
+
         JSplitPane mainHorizontalSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sidebar, contentPanel);
         mainHorizontalSplit.setDividerLocation(220);
         mainHorizontalSplit.setContinuousLayout(true);
-        
+
+        consolePanel = new ConsolePanel();
+        consolePanel.setPreferredSize(new Dimension(0, 200));
+
         JSplitPane mainVerticalSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, mainHorizontalSplit, consolePanel);
         mainVerticalSplit.setDividerLocation(frame.getHeight() - 250);
         mainVerticalSplit.setResizeWeight(1.0);
-        
+
         frame.add(mainVerticalSplit, BorderLayout.CENTER);
-        
-        // Status Bar
+
         JPanel statusBar = new JPanel(new BorderLayout());
         statusBar.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
         JLabel statusLabel = new JLabel("Studio Ready");
         statusBar.add(statusLabel, BorderLayout.WEST);
-        
+
         String activeEnv = ConfigManager.getInstance().getActiveEnvironment();
         JLabel envLabel = new JLabel("Active Environment: " + (activeEnv != null ? activeEnv : "None"));
         statusBar.add(envLabel, BorderLayout.EAST);
-        
+
         frame.add(statusBar, BorderLayout.SOUTH);
+    }
+
+    /**
+     * Registers all built-in views. Sidebar order equals card order.
+     */
+    private void registerViews() {
+        addView("Home", new HomePanel());
+        addView("Environments", new EnvPanel());
+        addView("Content Browser", new ContentBrowserPanel());
+        addView("Sites & Pages", new SitesPanel());
+        addView("Package Manager", new PackageManagerPanel());
+        addView("GraphQL Editor", new GraphQLPanel());
+        addView("Workflow Monitor", new WorkflowPanel());
+        addView("Automation Recipes", new RecipePanel());
+        addView("AI Agent", new AgentPanel());
+        addView("Audit & Cache", new AuditPanel());
+    }
+
+    /**
+     * Registers a new view into the sidebar and card layout. Call before
+     * {@link #show()} so the window picks up the new entry.
+     *
+     * @param label label shown in the sidebar
+     * @param panel panel shown when the entry is selected
+     */
+    public void addView(String label, JPanel panel) {
+        Objects.requireNonNull(label, "label");
+        Objects.requireNonNull(panel, "panel");
+        String id = toCardId(label);
+        views.add(new StudioView(label, id, panel));
+        contentPanel.add(panel, id);
+        sidebarModel.addElement(label);
+    }
+
+    private static String toCardId(String label) {
+        return label.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_").replaceAll("^_+|_+$", "");
     }
 
     private JPanel createSidebar() {
         JPanel sidebar = new JPanel(new BorderLayout());
         sidebar.setBackground(new Color(40, 40, 40));
-        
-        DefaultListModel<String> model = new DefaultListModel<>();
-        model.addElement("Home");
-        model.addElement("Environments");
-        model.addElement("Content Browser");
-        model.addElement("Sites & Pages");
-        model.addElement("Package Manager");
-        model.addElement("GraphQL Editor");
-        model.addElement("Workflow Monitor");
-        model.addElement("Automation Recipes");
-        model.addElement("AI Agent");
-        model.addElement("Audit & Cache");
-        
-        JList<String> list = new JList<>(model);
+
+        JList<String> list = new JList<>(sidebarModel);
         list.setBackground(new Color(40, 40, 40));
         list.setForeground(Color.WHITE);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setSelectedIndex(0);
         list.setFont(new Font("SansSerif", Font.BOLD, 14));
         list.setFixedCellHeight(45);
-        
+
         list.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                String selection = list.getSelectedValue();
-                if ("Home".equals(selection)) {
-                    cardLayout.show(contentPanel, "HOME");
-                } else if ("Environments".equals(selection)) {
-                    cardLayout.show(contentPanel, "ENV");
-                } else if ("Content Browser".equals(selection)) {
-                    cardLayout.show(contentPanel, "BROWSER");
-                } else if ("Sites & Pages".equals(selection)) {
-                    cardLayout.show(contentPanel, "SITES");
-                } else if ("Package Manager".equals(selection)) {
-                    cardLayout.show(contentPanel, "PACKAGES");
-                } else if ("GraphQL Editor".equals(selection)) {
-                    cardLayout.show(contentPanel, "GRAPHQL");
-                } else if ("Workflow Monitor".equals(selection)) {
-                    cardLayout.show(contentPanel, "WORKFLOW");
-                } else if ("Automation Recipes".equals(selection)) {
-                    cardLayout.show(contentPanel, "RECIPE");
-                } else if ("AI Agent".equals(selection)) {
-                    cardLayout.show(contentPanel, "AGENT");
-                } else if ("Audit & Cache".equals(selection)) {
-                    cardLayout.show(contentPanel, "AUDIT");
+                int index = list.getSelectedIndex();
+                if (index >= 0 && index < views.size()) {
+                    cardLayout.show(contentPanel, views.get(index).id());
                 }
             }
         });
-        
+
         sidebar.add(new JScrollPane(list), BorderLayout.CENTER);
-        
+
         JLabel logo = new JLabel(" AEM STUDIO", SwingConstants.CENTER);
         logo.setFont(new Font("SansSerif", Font.BOLD, 18));
         logo.setForeground(new Color(230, 0, 0));
         logo.setPreferredSize(new Dimension(200, 60));
         sidebar.add(logo, BorderLayout.NORTH);
-        
+
         return sidebar;
     }
 
@@ -167,9 +156,7 @@ public class AemStudioGui {
     public static void launch() {
         SwingUtilities.invokeLater(() -> {
             try {
-                // Set Look and Feel
                 FlatDarkLaf.setup();
-                
                 AemStudioGui gui = new AemStudioGui();
                 gui.show();
             } catch (Exception e) {
