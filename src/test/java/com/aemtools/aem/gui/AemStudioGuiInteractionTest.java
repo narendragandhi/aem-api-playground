@@ -16,6 +16,7 @@ import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -69,6 +70,30 @@ public class AemStudioGuiInteractionTest {
                 frame.dispose();
             }
         });
+    }
+
+    @Test
+    public void testDuplicateViewRejected() throws Exception {
+        if (GraphicsEnvironment.isHeadless()) {
+            System.out.println("Skipping GUI interaction test in headless environment");
+            return;
+        }
+        SwingUtilities.invokeAndWait(() -> {
+            AemStudioGui gui = new AemStudioGui();
+            try {
+                assertThrows(IllegalArgumentException.class,
+                    () -> gui.addView("Home", new JPanel()),
+                    "Duplicate label should be rejected");
+            } finally {
+                disposeAllFrames();
+            }
+        });
+    }
+
+    private static void disposeAllFrames() {
+        for (Frame f : Frame.getFrames()) {
+            f.dispose();
+        }
     }
 
     private static JFrame findFrame(AemStudioGui gui) {

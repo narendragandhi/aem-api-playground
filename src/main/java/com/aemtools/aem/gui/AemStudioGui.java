@@ -103,14 +103,26 @@ public class AemStudioGui {
      *
      * @param label label shown in the sidebar
      * @param panel panel shown when the entry is selected
+     * @throws IllegalArgumentException if the label or its derived card id is
+     *         already registered
      */
     public void addView(String label, JPanel panel) {
         Objects.requireNonNull(label, "label");
         Objects.requireNonNull(panel, "panel");
         String id = toCardId(label);
+        if (views.stream().anyMatch(v -> v.label().equals(label) || v.id().equals(id))) {
+            throw new IllegalArgumentException("View already registered: " + label);
+        }
         views.add(new StudioView(label, id, panel));
         contentPanel.add(panel, id);
-        sidebarModel.addElement(label);
+        refreshSidebarModel();
+    }
+
+    private void refreshSidebarModel() {
+        sidebarModel.clear();
+        for (StudioView view : views) {
+            sidebarModel.addElement(view.label());
+        }
     }
 
     private static String toCardId(String label) {

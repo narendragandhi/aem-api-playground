@@ -49,9 +49,13 @@ A full-featured visual interface is included for users who prefer a graphical da
 ### Features
 - **Dashboard**: Quick view of environment health and active tasks.
 - **Content Browser**: Explore Assets and Content Fragments with a visual tree and property inspector.
+- **Sites & Pages**: Browse site structure and pages.
+- **Package Manager**: View and refresh CRX packages.
 - **GraphQL Editor**: Test and execute GraphQL queries with variables.
 - **Workflow Monitor**: Track and manage running workflow instances.
 - **Recipe Runner**: Execute multi-step automation sequences visually.
+- **AI Agent**: Agent-assisted operations.
+- **Audit & Cache**: Audit and cache controls.
 - **Integrated Console**: See the raw CLI logs and HTTP traffic in real-time.
 
 ### Launching the Studio
@@ -62,6 +66,22 @@ java -jar target/aem-api-1.0.0.jar gui
 # Mock Mode (Explore without a server)
 java -jar target/aem-api-1.0.0.jar --mock gui
 ```
+
+### Extending the Studio
+The Studio is built around a small view registry. Every sidebar entry is a
+`JPanel` registered through [`AemStudioGui.addView(label, panel)`](src/main/java/com/aemtools/aem/gui/AemStudioGui.java);
+the sidebar order and the `CardLayout` derive from the same registry, so
+adding a new view is one call:
+
+```java
+AemStudioGui gui = new AemStudioGui();
+gui.addView("Assets", new MyAssetsPanel());
+```
+
+The card id is derived from the label (`"Assets"` → `ASSETS`). Views must be
+registered before `show()`. The GUI interaction test
+([`AemStudioGuiInteractionTest`](src/test/java/com/aemtools/aem/gui/AemStudioGuiInteractionTest.java))
+iterates the registry, so any added view is covered automatically.
 
 ## Piping & Chaining
 
