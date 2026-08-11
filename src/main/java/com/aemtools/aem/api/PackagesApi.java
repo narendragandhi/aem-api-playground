@@ -6,10 +6,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class PackagesApi {
 
@@ -113,15 +117,31 @@ public class PackagesApi {
         return true;
     }
 
-    public boolean recreate(String group, String name, String filterXml) throws IOException {
-        ObjectNode request = mapper.createObjectNode();
-        request.put("cmd", "recreate");
-        request.put("filter", filterXml);
+    /**
+     * Registers a package definition on the server from a Vault workspace filter, without
+     * any content. The returned package can subsequently be built via
+     * {@link #build(String, String)} to capture the filtered content.
+     *
+     * <p>The AEM PackMgr servlet exposes no {@code create}/{@code recreate} command on the
+     * AEM 6.5 SDK, so definitions are created by uploading an empty Vault package skeleton
+     * (a {@code META-INF/vault/filter.xml} plus an empty {@code jcr_root}).</p>
+     */
+    public Package uploadDefinition(String filterXml) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
+            zip.putNextEntry(new ZipEntry("META-INF/vault/filter.xml"));
+            zip.write(filterXml.getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
 
-        String path = "/crx/packmgr/service.jsp/" + group + "/" + name;
-        JsonNode response = client.post(path, request);
+            zip.putNextEntry(new ZipEntry("jcr_root/.content.xml"));
+            zip.write(("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<jcr:root xmlns:jcr=\"http://www.jcp.org/jcr/1.0\" "
+                + "xmlns:nt=\"http://www.jcp.org/jcr/nt/1.0\" "
+                + "jcr:primaryType=\"nt:unstructured\"/>").getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
 
-        return response.has("success") && response.get("success").asBoolean();
+        return upload(buffer.toByteArray(), "definition-" + System.currentTimeMillis() + ".zip");
     }
 
     private AemApiClient.RawResponse runServiceCmd(String cmd, String group, String name) throws IOException {

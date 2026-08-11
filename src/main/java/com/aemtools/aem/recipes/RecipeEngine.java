@@ -36,6 +36,25 @@ public class RecipeEngine {
     }
   }
 
+  private final AemApiClient injectedClient;
+
+  public RecipeEngine() {
+    this(null);
+  }
+
+  /**
+   * @param client an optional pre-configured client (e.g. pointed at an AEM as a
+   *     Cloud Service author with an IMS token); when {@code null} each recipe
+   *     builds a client for the globally active environment
+   */
+  public RecipeEngine(AemApiClient client) {
+    this.injectedClient = client;
+  }
+
+  private AemApiClient client() {
+    return injectedClient != null ? injectedClient : new AemApiClient();
+  }
+
   /** Launch a new site: create root + sub-pages, optionally publish. */
   public RecipeResult siteLaunch(String sitePath, String title, String template, boolean publish) {
     List<String> steps = new ArrayList<>();
@@ -46,7 +65,7 @@ public class RecipeEngine {
     steps.add("Publish: " + publish);
 
     try {
-      AemApiClient client = new AemApiClient();
+      AemApiClient client = client();
       PagesApi pagesApi = new PagesApi(client);
       ReplicationApi replicationApi = new ReplicationApi(client);
 
@@ -82,11 +101,11 @@ public class RecipeEngine {
     steps.add("Output Folder: " + outputDir);
 
     try {
-      AemApiClient client = new AemApiClient();
+      AemApiClient client = client();
       PackagesApi packagesApi = new PackagesApi(client);
 
       String timestamp = String.valueOf(System.currentTimeMillis());
-      String packageName = "backup_" + path.replace("/", "_").substring(1) + "_" + timestamp;
+      String backupName = "backup_" + path.replace("/", "_").substring(1) + "_" + timestamp;
 
       Path outPath = Paths.get(outputDir);
       if (!Files.exists(outPath)) {
@@ -97,18 +116,20 @@ public class RecipeEngine {
       String filterXml = String.format(
           "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
               + "<workspaceFilter version=\"1.0\"><filter root=\"%s\"/></workspaceFilter>", path);
-      packagesApi.recreate(group, packageName, filterXml);
+      PackagesApi.Package definition = packagesApi.uploadDefinition(filterXml);
+      String serverGroup = definition.getGroup();
+      String serverName = definition.getName();
 
       steps.add("Step 2: Building package...");
-      boolean buildSuccess = packagesApi.build(group, packageName);
+      boolean buildSuccess = packagesApi.build(serverGroup, serverName);
       if (!buildSuccess) {
         steps.add("Error: Package build failed on server.");
         return RecipeResult.fail(steps, "Package build failed on server.");
       }
 
       steps.add("Step 3: Downloading package...");
-      Path localZip = outPath.resolve(packageName + ".zip");
-      packagesApi.download(group, packageName, localZip);
+      Path localZip = outPath.resolve(backupName + ".zip");
+      packagesApi.download(serverGroup, serverName, localZip);
 
       steps.add("Backup complete! File saved to: " + localZip.toAbsolutePath());
       return RecipeResult.ok(steps);
@@ -128,7 +149,7 @@ public class RecipeEngine {
     steps.add("Publish: " + publish);
 
     try {
-      AemApiClient client = new AemApiClient();
+      AemApiClient client = client();
       AssetsApi assetsApi = new AssetsApi(client);
       TagsApi tagsApi = new TagsApi(client);
       ReplicationApi replicationApi = new ReplicationApi(client);
@@ -180,7 +201,7 @@ public class RecipeEngine {
     steps.add("Groups: " + groups);
 
     try {
-      AemApiClient client = new AemApiClient();
+      AemApiClient client = client();
       UsersApi usersApi = new UsersApi(client);
 
       steps.add("Step 1: Creating user " + userId + "...");
@@ -236,7 +257,7 @@ public class RecipeEngine {
       Path pkgPath = tempDir.resolve(name + ".zip");
 
       steps.add("Step 1: Downloading package from current environment...");
-      AemApiClient sourceClient = new AemApiClient();
+      AemApiClient sourceClient = client();
       PackagesApi sourceApi = new PackagesApi(sourceClient);
       sourceApi.download(group, name, pkgPath);
       steps.add("  Downloaded to: " + pkgPath.toAbsolutePath());

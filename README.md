@@ -300,6 +300,35 @@ java -jar aem-api-1.0.0.jar connect --env dev \
   --url http://localhost:4502 --user admin --password admin --save
 ```
 
+### AEM as a Cloud Service
+
+The client authenticates to AEM Cloud Service authors with an **IMS access token**
+(sent as `Authorization: Bearer <token>`), and can enforce HTTPS-only targets.
+
+```bash
+# From an Adobe ID / Cloud Manager session (see `aio login`), or an integration
+# token exchanged from service credentials:
+java -jar aem-api-1.0.0.jar connect --env cloud \
+  --url https://author-pXXXXX-eXXXXXX.adobeaemcloud.com \
+  --access-token "<IMS access token>" --https-only --save
+```
+
+- **Auth precedence**: an explicit `--user/--password` (Basic) wins over an
+  access token; otherwise the IMS `Bearer` token is used.
+- **HTTPS**: Cloud Service URLs must be HTTPS. `--https-only` rejects plain-HTTP
+  targets so credentials are never sent in the clear.
+- **PackMgr on Cloud**: the Package Manager surface (`list`, `get`, `upload`,
+  `build`, `download`, `rm`) is available on the Cloud author service and works
+  unchanged here. `install`/`uninstall` are **restricted** on AEM as a Cloud
+  Service (permitted in dev/RDE, blocked in higher tiers), and packages that
+  modify OSGi configurations or security ACLs are rejected by the platform —
+  prefer Cloud Manager pipelines for deployment. Cloud-safe recipes like
+  `content-backup` (build + download only) run on Cloud Service today.
+- **Tested shape**: `AemCloudMockE2ETest` spins up a mock Cloud author that
+  enforces the IMS Bearer header on every call and implements the PackMgr
+  endpoints, proving the auth path and the package/recipe flows against a
+  cloud-shaped server without a live environment.
+
 ### Available MCP Tools
 
 | Category | Tools |

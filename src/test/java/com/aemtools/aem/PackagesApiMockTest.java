@@ -13,14 +13,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
 class PackagesApiMockTest {
@@ -170,11 +176,33 @@ class PackagesApiMockTest {
     }
 
     @Test
-    void testRecreatePostsFilter() throws IOException {
-        ObjectNode response = mapper.createObjectNode();
-        response.put("success", true);
-        when(mockClient.post(eq("/crx/packmgr/service.jsp/g/n"), any())).thenReturn(response);
+    void testUploadDefinitionBuildsSkeletonZip() throws IOException {
+        String uploadResponse =
+            "<crx><data><package><group>temporary</group>"
+                + "<name>pack_abc123</name><version>1.0</version><size>42</size>"
+                + "</package></data><status code=\"200\">ok</status></crx>";
+        ArgumentCaptor<byte[]> captor = ArgumentCaptor.forClass(byte[].class);
+        when(mockClient.uploadMultipart(anyString(), anyString(), anyString(), captor.capture()))
+            .thenReturn(uploadResponse);
 
-        assertTrue(packagesApi.recreate("g", "n", "<filter root=\"/content\"/>"));
+        PackagesApi.Package pkg = packagesApi.uploadDefinition(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<workspaceFilter version=\"1.0\"><filter root=\"/content\"/></workspaceFilter>");
+
+        assertEquals("temporary", pkg.getGroup());
+        assertEquals("pack_abc123", pkg.getName());
+        assertEquals("1.0", pkg.getVersion());
+
+        byte[] zipData = captor.getValue();
+        Map<String, String> entries = new java.util.HashMap<>();
+        try (ZipInputStream in = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+            ZipEntry entry;
+            while ((entry = in.getNextEntry()) != null) {
+                entries.put(entry.getName(), new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            }
+        }
+        assertTrue(entries.containsKey("META-INF/vault/filter.xml"));
+        assertTrue(entries.get("META-INF/vault/filter.xml").contains("<filter root=\"/content\"/>"));
+        assertTrue(entries.containsKey("jcr_root/.content.xml"));
     }
 }

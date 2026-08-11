@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `AemCloudMockE2ETest`: end-to-end test against a mock AEM as a Cloud Service
+  author that enforces an IMS `Bearer` token on every request and implements
+  the PackMgr endpoints (`list.jsp`, `service.jsp` upload/build/get). Covers
+  package list/get, definition upload + build + download, and the full
+  `content-backup` recipe over the Bearer auth path.
+- `RecipeEngine` now accepts an injected `AemApiClient` (constructor),
+  defaulting to the active environment when absent, so recipes can be pointed
+  at a specific author (e.g. a Cloud Service) and tested in-process.
+- README: "AEM as a Cloud Service" section documenting IMS Bearer auth, HTTPS
+  enforcement, and PackMgr availability/restrictions on Cloud Service author.
+
 ### Fixed
+- `aem_recipe_content_backup` (and the `content-backup` recipe) failed live
+  with a 404: `PackagesApi.recreate` posted a JSON `cmd=recreate` request to
+  `/crx/packmgr/service.jsp/{group}/{name}`, but the AEM 6.5 PackMgr servlet
+  exposes no `create`/`recreate` command. Replaced it with
+  `PackagesApi.uploadDefinition`, which registers a package definition by
+  uploading an empty Vault skeleton (a `META-INF/vault/filter.xml` plus an
+  empty `jcr_root`) via the supported `cmd=upload` endpoint, then builds and
+  downloads it. Verified live end-to-end against the AEM SDK (backup of
+  `/content` downloads a 2 MB package containing real content).
 - Compile blocker: `RecipeCommand` referenced `PagesApi` and `PackagesApi`
   without importing them; `mvn package` now builds cleanly.
 - Global flags (`--mock`, `--json`, `--output`, `--max`, `--timeout`,
