@@ -96,7 +96,7 @@ public class CompletionGenerator {
     }
 
     private static String getCommands() {
-        return "shell connect cf assets sites forms config graphql translation cloudmgr folders tags workflow users replicate packages models audit agent help version";
+        return "shell connect cf assets sites forms config graphql translation cloudmgr folders tags workflow users replicate packages models audit agent completion gui recipe oak oak-upgrade help version";
     }
 
     private static String getOptions() {
@@ -124,6 +124,8 @@ public class CompletionGenerator {
             'models:Content Fragment Models operations'
             'audit:View audit logs'
             'agent:AI-powered AEM assistant'
+            'oak:Offline Oak maintenance via oak-run'
+            'oak-upgrade:Offline Oak content migration via oak-upgrade'
             'help:Show help'
             'version:Show version'""";
     }
@@ -159,6 +161,12 @@ public class CompletionGenerator {
                 ;;
             agent)
                 _arguments '-m[Message]' '-i[Interactive]' '--api-key[API key]' '--model[Model]' '--stats[Stats]' '-h[Help]'
+                ;;
+            oak)
+                _arguments '--jar[Oak-run jar path]' '--store[Segment store path]' '--fds-path[FileDataStore path]' '--heap[JVM heap]' '--force[Force run]' '-h[Help]'
+                ;;
+            oak-upgrade)
+                _arguments '--jar[Oak-upgrade jar path]' '--source[Source repository]' '--target[Target repository]' '--include[Include paths]' '--exclude[Exclude paths]' '--force[Force run]' '-h[Help]'
                 ;;""";
     }
 }

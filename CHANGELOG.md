@@ -8,6 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- README/AGENTS reframe: the repo is now explicitly presented as **two tools
+  with separate contracts** — the remote AEM REST surface (everything except
+  `oak`/`oak-upgrade`) and the offline repository-maintenance tool
+  (`oak`/`oak-upgrade` only). The `oak` rows were removed from the remote
+  command table, and the operating model of each tool (live REST + mock vs
+  stopped AEM + host access + version-locked jar) is stated up front.
+- Oak maintenance commands wrapping the Apache oak-run and oak-upgrade jars:
+  `oak detect` (reads the Oak core bundle version from
+  `/system/console/bundles.json` of the connected instance and suggests the
+  matching `org.apache.jackrabbit:oak-run` artifact), offline `oak check`,
+  `oak compact`, `oak checkpoints`, `oak index` (`--info`, `--definitions`,
+  `--reindex`), `oak backup`, `oak export`, and `oak-upgrade` for offline
+  content migration with path filters. Safety rails: these commands refuse to
+  run while a local AEM instance appears reachable unless `--force`, honor
+  `--dry-run`, and resolve the jar via `--jar` > `AEM_API_OAK_RUN` /
+  `AEM_API_OAK_UPGRADE` env vars > `config defaults --oak-run-jar /
+  --oak-upgrade-jar`. Six new MCP tools (`aem_oak_detect`, `aem_oak_check`,
+  `aem_oak_compact`, `aem_oak_reindex`, `aem_oak_backup`, `aem_oak_upgrade`)
+  execute the same flows and return captured output. Covered by 17 new tests
+  (argument assembly, jar resolution precedence, offline guard, Oak version
+  detection); not yet executed against a live segment store — tracked in
+  `issues/things-that-do-not-work/oak-tools-unverified-on-live-stores.md`.
+- `AEM_API_*` environment variable overrides for CI/automation, so commands
+  run without a saved `connect` profile (precedence: CLI flags > env vars >
+  saved profile): `AEM_API_URL` (target URL), `AEM_API_ACCESS_TOKEN`
+  (Bearer auth), `AEM_API_USER` + `AEM_API_PASSWORD` (basic auth),
+  `AEM_API_ENV` (active environment name). `config show` lists any active
+  overrides. Covered by `ConfigManagerEnvOverrideTest`.
+- README "Fidelity scores" table in the style of AWS Emulator's per-release
+  scores: per command group, endpoint generation, mock coverage, and the
+  target each group was verified against.
+- `AGENTS.md` for AI coding agents: build/test commands, singleton and
+  mock-test conventions, credential handling, and the docs/issues sync rules.
+- `issues/` directory tracking per-command fidelity gaps in the style of
+  [aws/aws-emulator](https://github.com/aws/aws-emulator):
+  `issues/things-that-do-not-work/` for known gaps (pages CRUD pre-SP13,
+  classic-only workflow commands, QueryBuilder response variance, untested
+  surfaces, package-migrate permissions) and `issues/things-that-now-work/`
+  for verified behavior (workflow start fallback, PackMgr on the Cloud
+  author). README "Caveats" now links each caveat to its tracked issue file.
 - `AemCloudMockE2ETest`: end-to-end test against a mock AEM as a Cloud Service
   author that enforces an IMS `Bearer` token on every request and implements
   the PackMgr endpoints (`list.jsp`, `service.jsp` upload/build/get). Covers

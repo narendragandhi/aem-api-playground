@@ -6,10 +6,29 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 public class ConfigManager {
+
+    // CI/automation overrides via environment variables.
+    // Precedence: explicit CLI flags > these env vars > the saved profile.
+    // AEM_API_ENV           override the active environment name
+    // AEM_API_URL           override the active environment URL
+    // AEM_API_ACCESS_TOKEN  override the access token (Bearer auth)
+    // AEM_API_USER / AEM_API_PASSWORD  override basic auth (base64 of user:password)
+    private Function<String, String> envLookup = System::getenv;
+
+    void setEnvLookupForTesting(Function<String, String> lookup) {
+        this.envLookup = lookup;
+    }
+
+    private String envOverride(String name) {
+        String v = envLookup.apply(name);
+        return (v == null || v.isBlank()) ? null : v.trim();
+    }
 
     private static ConfigManager instance;
     private final Map<String, Map<String, String>> environments = new HashMap<>();
@@ -120,7 +139,9 @@ public class ConfigManager {
     }
 
     public String getActiveAccessToken() {
-        Map<String, String> env = environments.get(activeEnvironment);
+        String override = envOverride("AEM_API_ACCESS_TOKEN");
+        if (override != null) return override;
+        Map<String, String> env = environments.get(getActiveEnvironment());
         if (env == null) return null;
         String token = env.get("accessToken");
         if (token == null) return null;
@@ -156,11 +177,14 @@ public class ConfigManager {
     }
 
     public String getActiveEnvironment() {
-        return activeEnvironment;
+        String override = envOverride("AEM_API_ENV");
+        return override != null ? override : activeEnvironment;
     }
 
     public String getActiveEnvironmentUrl() {
-        Map<String, String> env = environments.get(activeEnvironment);
+        String override = envOverride("AEM_API_URL");
+        if (override != null) return override;
+        Map<String, String> env = environments.get(getActiveEnvironment());
         return env != null ? env.get("url") : null;
     }
 
@@ -177,7 +201,13 @@ public class ConfigManager {
     }
 
     public String getActiveBasicAuth() {
-        Map<String, String> env = environments.get(activeEnvironment);
+        String user = envOverride("AEM_API_USER");
+        if (user != null) {
+            String password = envLookup.apply("AEM_API_PASSWORD");
+            return Base64.getEncoder().encodeToString(
+                    (user + ":" + (password != null ? password : "")).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        Map<String, String> env = environments.get(getActiveEnvironment());
         if (env == null) return null;
         String auth = env.get("basicAuth");
         if (auth == null) return null;
@@ -247,7 +277,8 @@ public class ConfigManager {
 
     public void showConfig() {
         System.out.println("\nCurrent Configuration:");
-        System.out.println("  Active environment: " + activeEnvironment);
+        System.out.println("  Active environment: " + getActiveEnvironment()
+                + (envOverride("AEM_API_ENV") != null ? "  (AEM_API_ENV override)" : ""));
         System.out.println("  Debug mode: " + (debugEnabled ? "ON" : "OFF"));
         
         Map<String, String> env = environments.get(activeEnvironment);
@@ -260,6 +291,15 @@ public class ConfigManager {
             System.out.println("    Client ID: " + (env.get("clientId") != null ? env.get("clientId") : "(not set)"));
             System.out.println("    Client Secret: " + (env.get("clientSecret") != null ? "***encrypted***" : "(not set)"));
             System.out.println("    Basic Auth: " + (env.get("basicAuth") != null ? "***encrypted***" : "(not set)"));
+        }
+        String[] possibleOverrides = {"AEM_API_URL", "AEM_API_ACCESS_TOKEN", "AEM_API_USER", "AEM_API_ENV"};
+        java.util.List<String> active = new java.util.ArrayList<>();
+        for (String o : possibleOverrides) {
+            if (envOverride(o) != null) active.add(o);
+        }
+        if (!active.isEmpty()) {
+            System.out.println("\n  Environment variable overrides active: " + String.join(", ", active));
+            System.out.println("  (AEM_API_* > saved profile; CLI flags > both)");
         }
         System.out.println();
     }

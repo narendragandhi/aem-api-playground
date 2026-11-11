@@ -10,7 +10,13 @@ import com.aemtools.aem.api.TagsApi;
 import com.aemtools.aem.api.UsersApi;
 import com.aemtools.aem.api.WorkflowApi;
 import com.aemtools.aem.client.AemApiClient;
+import com.aemtools.aem.commands.OakCommand;
+import com.aemtools.aem.commands.OakUpgradeCommand;
 import com.aemtools.aem.config.ConfigManager;
+import com.aemtools.aem.oak.OakJarResolver;
+import com.aemtools.aem.oak.OakOfflineGuard;
+import com.aemtools.aem.oak.OakToolRunner;
+import com.aemtools.aem.oak.OakVersionDetector;
 import com.aemtools.aem.recipes.RecipeEngine;
 import com.aemtools.aem.recipes.RecipeEngine.RecipeResult;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -427,6 +433,58 @@ public class AemMcpServer {
             "install", prop("boolean", "Install after upload (default true)", false)
         )));
 
+    // Oak maintenance tools (oak-run / oak-upgrade; offline segment-store operations)
+    tools.add(buildTool("aem_oak_detect", "Detect the Oak version of the connected AEM instance to pick the matching oak-run jar",
+        Map.of()));
+
+    tools.add(buildTool("aem_oak_check", "Run oak-run consistency check on a segment store (offline; AEM must be stopped)",
+        Map.of(
+            "jar", prop("string", "Path to the oak-run jar (optional if AEM_API_OAK_RUN or a saved default is set)", false),
+            "store", prop("string", "Path to the segment store", true),
+            "fdsPath", prop("string", "Path to the FileDataStore", false),
+            "heap", prop("string", "JVM max heap, e.g. 4g", false),
+            "force", prop("boolean", "Run even if a local AEM instance appears to be running", false)
+        )));
+
+    tools.add(buildTool("aem_oak_compact", "Run oak-run compaction on a TarMK segment store (offline; AEM must be stopped)",
+        Map.of(
+            "jar", prop("string", "Path to the oak-run jar", false),
+            "store", prop("string", "Path to the segment store", true),
+            "fdsPath", prop("string", "Path to the FileDataStore", false),
+            "heap", prop("string", "JVM max heap, e.g. 4g", false),
+            "force", prop("boolean", "Run even if a local AEM instance appears to be running", false)
+        )));
+
+    tools.add(buildTool("aem_oak_reindex", "Reindex a Lucene index via oak-run index --reindex (offline; AEM must be stopped)",
+        Map.of(
+            "jar", prop("string", "Path to the oak-run jar", false),
+            "store", prop("string", "Path to the segment store", true),
+            "indexPaths", prop("string", "Comma-separated index paths, e.g. /oak:index/cqPageLucene", true),
+            "fdsPath", prop("string", "Path to the FileDataStore", false),
+            "heap", prop("string", "JVM max heap, e.g. 4g", false),
+            "force", prop("boolean", "Run even if a local AEM instance appears to be running", false)
+        )));
+
+    tools.add(buildTool("aem_oak_backup", "Back up a segment store via oak-run backup (offline; AEM must be stopped)",
+        Map.of(
+            "jar", prop("string", "Path to the oak-run jar", false),
+            "store", prop("string", "Path to the segment store", true),
+            "target", prop("string", "Backup target directory or file", true),
+            "heap", prop("string", "JVM max heap, e.g. 4g", false),
+            "force", prop("boolean", "Run even if a local AEM instance appears to be running", false)
+        )));
+
+    tools.add(buildTool("aem_oak_upgrade", "Migrate content between offline Oak repositories via oak-upgrade",
+        Map.of(
+            "jar", prop("string", "Path to the oak-upgrade jar", false),
+            "source", prop("string", "Source segment store path or mongodb:// URI", true),
+            "target", prop("string", "Target segment store path or mongodb:// URI", true),
+            "include", prop("string", "Comma-separated paths to include", false),
+            "exclude", prop("string", "Comma-separated paths to exclude", false),
+            "heap", prop("string", "JVM max heap, e.g. 8g", false),
+            "force", prop("boolean", "Run even if a local AEM instance appears to be running", false)
+        )));
+
     return Map.of("tools", tools);
   }
 
@@ -528,6 +586,12 @@ public class AemMcpServer {
       case "aem_recipe_asset_batch" -> handleRecipeAssetBatch(args);
       case "aem_recipe_user_onboard" -> handleRecipeUserOnboard(args);
       case "aem_recipe_package_migrate" -> handleRecipePackageMigrate(args);
+      case "aem_oak_detect" -> handleOakDetect(args);
+      case "aem_oak_check" -> handleOakCheck(args);
+      case "aem_oak_compact" -> handleOakCompact(args);
+      case "aem_oak_reindex" -> handleOakReindex(args);
+      case "aem_oak_backup" -> handleOakBackup(args);
+      case "aem_oak_upgrade" -> handleOakUpgrade(args);
       default -> throw new IllegalArgumentException("Unknown tool: " + name);
     };
 
@@ -1186,6 +1250,145 @@ public class AemMcpServer {
     if (result.error() != null) {
       node.put("error", result.error());
     }
+    return node;
+  }
+
+  // Oak maintenance (oak-run / oak-upgrade)
+
+  private Object handleOakDetect(JsonNode args) {
+    try {
+      String version = OakVersionDetector.oakCoreVersion(new AemApiClient());
+      if (version == null) {
+        return Map.of("found", false,
+            "hint", "org.apache.jackrabbit.oak-core bundle not found in /system/console/bundles.json");
+      }
+      return Map.of("found", true, "oakVersion", version,
+          "oakRunCoordinate", "org.apache.jackrabbit:oak-run:" + version,
+          "persistWith", "aem-api config defaults --oak-run-jar /path/to/oak-run.jar");
+    } catch (Exception e) {
+      return Map.of("found", false, "error", nullSafe(e.getMessage()),
+          "hint", "/system/console/bundles.json needs a session with console access");
+    }
+  }
+
+  private Object handleOakCheck(JsonNode args) {
+    String jar = args.path("jar").asText(null);
+    String store = args.path("store").asText(null);
+    String fds = args.path("fdsPath").asText(null);
+    String heap = args.path("heap").asText(null);
+    boolean force = args.path("force").asBoolean(false);
+    if (store == null) {
+      return Map.of("error", "store is required");
+    }
+    if (!OakOfflineGuard.requireStopped(force)) {
+      return Map.of("refused", true, "reason", "local AEM appears to be running; stop it or pass force");
+    }
+    try {
+      String jarPath = OakJarResolver.resolve(jar, "AEM_API_OAK_RUN", "oakRunJar", "oak-run");
+      return oakResult(OakCommand.CheckCommand.buildArgs(jarPath, heap, store, fds));
+    } catch (IllegalStateException e) {
+      return Map.of("error", e.getMessage());
+    }
+  }
+
+  private Object handleOakCompact(JsonNode args) {
+    String jar = args.path("jar").asText(null);
+    String store = args.path("store").asText(null);
+    String fds = args.path("fdsPath").asText(null);
+    String heap = args.path("heap").asText(null);
+    boolean force = args.path("force").asBoolean(false);
+    if (store == null) {
+      return Map.of("error", "store is required");
+    }
+    if (!OakOfflineGuard.requireStopped(force)) {
+      return Map.of("refused", true, "reason", "local AEM appears to be running; stop it or pass force");
+    }
+    try {
+      String jarPath = OakJarResolver.resolve(jar, "AEM_API_OAK_RUN", "oakRunJar", "oak-run");
+      return oakResult(OakCommand.CompactCommand.buildArgs(jarPath, heap, store, fds));
+    } catch (IllegalStateException e) {
+      return Map.of("error", e.getMessage());
+    }
+  }
+
+  private Object handleOakReindex(JsonNode args) {
+    String jar = args.path("jar").asText(null);
+    String store = args.path("store").asText(null);
+    String indexPaths = args.path("indexPaths").asText(null);
+    String fds = args.path("fdsPath").asText(null);
+    String heap = args.path("heap").asText(null);
+    boolean force = args.path("force").asBoolean(false);
+    if (store == null) {
+      return Map.of("error", "store is required");
+    }
+    if (indexPaths == null || indexPaths.isBlank()) {
+      return Map.of("error", "indexPaths is required (e.g. /oak:index/cqPageLucene)");
+    }
+    if (!OakOfflineGuard.requireStopped(force)) {
+      return Map.of("refused", true, "reason", "local AEM appears to be running; stop it or pass force");
+    }
+    try {
+      String jarPath = OakJarResolver.resolve(jar, "AEM_API_OAK_RUN", "oakRunJar", "oak-run");
+      List<String> cmd = OakCommand.IndexCommand.buildArgs(jarPath, heap, store, fds,
+          false, false, true, indexPaths);
+      if (cmd == null) {
+        return Map.of("error", "invalid index arguments");
+      }
+      return oakResult(cmd);
+    } catch (IllegalStateException e) {
+      return Map.of("error", e.getMessage());
+    }
+  }
+
+  private Object handleOakBackup(JsonNode args) {
+    String jar = args.path("jar").asText(null);
+    String store = args.path("store").asText(null);
+    String target = args.path("target").asText(null);
+    String heap = args.path("heap").asText(null);
+    boolean force = args.path("force").asBoolean(false);
+    if (store == null || target == null) {
+      return Map.of("error", "store and target are required");
+    }
+    if (!OakOfflineGuard.requireStopped(force)) {
+      return Map.of("refused", true, "reason", "local AEM appears to be running; stop it or pass force");
+    }
+    try {
+      String jarPath = OakJarResolver.resolve(jar, "AEM_API_OAK_RUN", "oakRunJar", "oak-run");
+      return oakResult(OakCommand.BackupCommand.buildArgs(jarPath, heap, store, target));
+    } catch (IllegalStateException e) {
+      return Map.of("error", e.getMessage());
+    }
+  }
+
+  private Object handleOakUpgrade(JsonNode args) {
+    String jar = args.path("jar").asText(null);
+    String source = args.path("source").asText(null);
+    String target = args.path("target").asText(null);
+    String include = args.path("include").asText(null);
+    String exclude = args.path("exclude").asText(null);
+    String heap = args.path("heap").asText(null);
+    boolean force = args.path("force").asBoolean(false);
+    if (source == null || target == null) {
+      return Map.of("error", "source and target are required");
+    }
+    if (!OakOfflineGuard.requireStopped(force)) {
+      return Map.of("refused", true, "reason", "local AEM appears to be running; stop it or pass force");
+    }
+    try {
+      String jarPath = OakJarResolver.resolve(jar, "AEM_API_OAK_UPGRADE", "oakUpgradeJar", "oak-upgrade");
+      return oakResult(OakUpgradeCommand.buildArgs(jarPath, heap, source, target,
+          include, exclude, null, false, null, null));
+    } catch (IllegalStateException e) {
+      return Map.of("error", e.getMessage());
+    }
+  }
+
+  private ObjectNode oakResult(List<String> command) {
+    OakToolRunner.OakResult result = OakToolRunner.runCaptured(command);
+    ObjectNode node = mapper.createObjectNode();
+    node.put("command", String.join(" ", command));
+    node.put("exitCode", result.exitCode());
+    node.put("output", result.output());
     return node;
   }
 

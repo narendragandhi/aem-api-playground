@@ -104,6 +104,12 @@ public class ConfigCommand implements Callable<Integer> {
         @Option(names = {"--cache"}, description = "Enable/disable caching: true, false")
         private String cache;
 
+        @Option(names = {"--oak-run-jar"}, description = "Path to the oak-run jar (see 'oak detect')")
+        private String oakRunJar;
+
+        @Option(names = {"--oak-upgrade-jar"}, description = "Path to the oak-upgrade jar")
+        private String oakUpgradeJar;
+
         @Option(names = {"--reset"}, description = "Reset to defaults")
         private boolean reset;
 
@@ -141,6 +147,14 @@ public class ConfigCommand implements Callable<Integer> {
             if (cache != null) {
                 config.setDefault("cache", cache);
                 System.out.println("Cache enabled: " + cache);
+            }
+            if (oakRunJar != null) {
+                config.setDefault("oakRunJar", oakRunJar);
+                System.out.println("oak-run jar set to: " + oakRunJar);
+            }
+            if (oakUpgradeJar != null) {
+                config.setDefault("oakUpgradeJar", oakUpgradeJar);
+                System.out.println("oak-upgrade jar set to: " + oakUpgradeJar);
             }
 
             config.save();

@@ -13,6 +13,8 @@ import com.aemtools.aem.commands.FormsCommand;
 import com.aemtools.aem.commands.GraphQLCommand;
 import com.aemtools.aem.commands.GuiCommand;
 import com.aemtools.aem.commands.ModelsCommand;
+import com.aemtools.aem.commands.OakCommand;
+import com.aemtools.aem.commands.OakUpgradeCommand;
 import com.aemtools.aem.commands.PackagesCommand;
 import com.aemtools.aem.commands.ReplicationCommand;
 import com.aemtools.aem.commands.ShellCommand;
@@ -78,7 +80,9 @@ import java.util.concurrent.Callable;
         AgentCommand.class,
         CompletionCommand.class,
         GuiCommand.class,
-        RecipeCommand.class  // Moved to commands package
+        RecipeCommand.class,  // Moved to commands package
+        OakCommand.class,
+        OakUpgradeCommand.class
     }
 )
 public class AemApi implements Callable<Integer> {

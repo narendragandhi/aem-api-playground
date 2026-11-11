@@ -2,6 +2,26 @@
 
 A command-line interface for testing Adobe Experience Manager (AEM) APIs.
 
+## Two tools, two operating models
+
+This repo contains two distinct tools with different contracts. Keep them
+apart in your head — and in your runbooks:
+
+1. **Remote AEM API surface** — everything except `oak`/`oak-upgrade`. Talks
+   to a **live AEM over REST** from anywhere: CLI commands, Studio GUI,
+   interactive shell, MCP server, recipes. Nothing installs on the AEM side;
+   `--mock` lets you explore without any instance at all.
+
+2. **Offline repository maintenance** — `oak` and `oak-upgrade` only. Wraps
+   the Apache oak-run / oak-upgrade jars against the **segment store on the
+   AEM host's disk**. Different contract: AEM must be **stopped** on the
+   target host, you need **shell access to that host**, and the tool jar must
+   **match the repository's Oak version** (see `oak detect`). Details in
+   "Oak maintenance" below.
+
+The only bridge between them is `oak detect`, which reads the running
+instance's Oak version so you can pick the right offline jar.
+
 ## Why This Tool?
 
 | Pain Point | Solution |
@@ -100,6 +120,43 @@ aem-api cf list | table
 aem-api cf list | export results.txt
 ```
 
+## Oak maintenance (oak-run / oak-upgrade)
+
+This is the **offline repository-maintenance tool** from "Two tools" above —
+a separate operating model from the REST surface. Everything in this section
+runs the Apache [oak-run](https://github.com/apache/jackrabbit-oak/tree/trunk/oak-run)
+and [oak-upgrade](https://github.com/apache/jackrabbit-oak/tree/trunk/oak-upgrade)
+jars locally on the AEM host — **AEM must be stopped on the target host**, and
+the jar must match the repository's Oak version.
+
+```bash
+# 1. Find the Oak version of a running instance (reads /system/console/bundles.json)
+aem-api oak detect --env local
+
+# 2. Persist the matching jar (or set AEM_API_OAK_RUN, or pass --jar each time)
+aem-api config defaults --oak-run-jar /path/to/oak-run-<version>.jar
+
+# 3. Run offline operations (refuses if a local AEM instance is reachable, unless --force)
+aem-api oak check    --store crx-quickstart/repository/segmentstore
+aem-api oak compact  --store crx-quickstart/repository/segmentstore --heap 4g
+aem-api oak checkpoints --store ... --action rm-unreferenced
+aem-api oak index    --store ... --reindex --index-paths /oak:index/cqPageLucene --fds-path ...
+aem-api oak backup   --store ... --target ./backup
+aem-api oak export   --store ... -p /content/dam/myproject -o ./export --blobs
+
+# 4. Migrate content between offline repositories (oak-upgrade)
+aem-api oak-upgrade --jar /path/to/oak-upgrade-<version>.jar \
+  --source old/crx-quickstart/repository/segmentstore \
+  --target new/crx-quickstart/repository/segmentstore \
+  --include /content/we-retail --exclude /var --heap 8g
+```
+
+Jar resolution precedence for both tools: `--jar` flag > `AEM_API_OAK_RUN` /
+`AEM_API_OAK_UPGRADE` env vars > saved defaults (`config defaults
+--oak-run-jar/--oak-upgrade-jar`). See
+[`issues/things-that-do-not-work/oak-tools-unverified-on-live-stores.md`](issues/things-that-do-not-work/oak-tools-unverified-on-live-stores.md)
+for the current verification status of these wrappers.
+
 ## Security
 
 - **Credentials**: Encrypted with AES-256-GCM
@@ -134,6 +191,10 @@ aem-api cf list | export results.txt
 | `gui` | Launch the AEM API Studio (desktop GUI) |
 | `recipe` | Predefined multi-step recipes (site-launch, content-backup, …) |
 
+> `oak` and `oak-upgrade` are **not part of this remote surface** — they are
+> the offline repository-maintenance tool with its own operating model; see
+> "Oak maintenance" below.
+
 ### Global flags
 
 Global options can be placed before any subcommand:
@@ -149,10 +210,57 @@ aem-api --cache false cf list           # disable response cache
 aem-api --verbose shell                 # verbose output
 ```
 
+### Environment variables (CI)
+
+For pipelines where a saved profile is inconvenient, point a command at AEM
+with environment variables instead. Precedence: explicit CLI flags > env vars
+> the saved profile.
+
+```bash
+export AEM_API_URL=https://author-pXXXXX-eXXXXXX.adobeaemcloud.com
+export AEM_API_ACCESS_TOKEN="<IMS access token>"   # Bearer auth
+export AEM_API_ENV=prod                            # optional: active env name
+
+aem-api cf list --path /content/dam/mysite
+```
+
+| Variable | Purpose |
+|----------|---------|
+| `AEM_API_URL` | Target AEM base URL (overrides the active profile) |
+| `AEM_API_ACCESS_TOKEN` | Bearer token (overrides the saved access token) |
+| `AEM_API_USER` / `AEM_API_PASSWORD` | Basic auth (overrides the saved credentials) |
+| `AEM_API_ENV` | Active environment name (overrides the saved selection) |
+
+`config show` reports which overrides are active, so you can tell where each
+value came from.
+
 ## Supported AEM versions & endpoints
 
 The CLI calls AEM over **two generations of endpoints**. Make sure your AEM
 instance supports the endpoints used by the commands you run.
+
+### Fidelity scores
+
+How closely each command group matches real AEM, in the style of the
+[fidelity scores published by AWS Emulator](https://github.com/aws/aws-emulator/releases).
+"Verified" = exercised against the named target; update this table with each
+release. Detailed gaps live in [`issues/`](issues/things-that-do-not-work/).
+
+| Command group | Endpoint generation | Mock coverage | Verified against |
+|---------------|--------------------|---------------|------------------|
+| `pages list/get/search` | classic (`.1.json`, `/bin/cq/search.json`) | `PagesApiMockTest` | mock only |
+| `pages create/update/delete/move` | modern `/api/pages` | `PagesApiMockTest` | mock only; real 6.5 needs SP13+ |
+| `cf list/get/create/delete` | modern `/api/content/fragments` | mock data | mock only |
+| `assets` | modern `/api/assets` | mock data | mock only |
+| `graphql` | AEM GraphQL endpoint | mock data | mock only |
+| `workflow start` | modern + classic fallback | `WorkflowApiMockTest` | mock only |
+| `workflow list/terminate` | modern `/api/workflow/*` | `WorkflowApiMockTest` | mock only |
+| `workflow inbox/history/purge` | classic `/bin/*`, `/etc/*` | mock data | mock only; classic-only |
+| `packages` + `content-backup` | `/crx/packmgr` | `AemCloudMockE2ETest`, `PackagesApiMockTest` | mock + live AEM SDK author |
+| `tags`, `users` | `/bin/querybuilder.json` | `TagsApiMockTest`, `UsersApiMockTest` | mock only; response shape varies by AEM version |
+| `replicate` | classic `/bin/replicate.json` | mock data | mock only |
+| `oak` check/compact/checkpoints/index/backup/export | offline segment store | arg-assembly tests | not verified on a live segment store; jar must match Oak version |
+| `oak-upgrade` | offline segment store | arg-assembly tests | not verified on a live migration |
 
 ### Modern `/api/*` endpoints (AEM as a Cloud Service, AEM 6.5 SP13+)
 
@@ -178,17 +286,24 @@ These are the only officially supported APIs going forward and are required for
 
 ### Caveats
 
+Per-command gaps and caveats are tracked as files under
+[`issues/`](issues/) — [`issues/things-that-do-not-work/`](issues/things-that-do-not-work/)
+for known gaps and [`issues/things-that-now-work/`](issues/things-that-now-work/)
+for behavior that has since been verified or fixed. Highlights:
+
 - **`pages create/update/delete/move` fail on AEM 6.5 before SP13** and on any
   AEM 6.4 or earlier — the modern `/api/pages` endpoint does not exist there.
   `pages list/get` and `pages search` still work because they use `.1.json` /
-  `/bin/cq/search.json`.
+  `/bin/cq/search.json`. ([issue](issues/things-that-do-not-work/pages-crud-pre-sp13.md))
 - **`workflow start` tries `/api/workflow/instances` first, then falls back to
   `/etc/workflow/instances`** when the modern endpoint returns 404, so it works
   on both generations. The `workflow inbox`/`history`/`purge` commands are
   classic-only and have no `/api/*` equivalent.
+  ([issue](issues/things-that-do-not-work/workflow-classic-only-commands.md))
 - **`tags` and `users` rely on `/bin/querybuilder.json`**, which exists on all
   AEM 6.x and Cloud Service instances, but response formats can vary slightly
   between major versions.
+  ([issue](issues/things-that-do-not-work/querybuilder-response-variance.md))
 - Always validate against your target version. When in doubt, run a command in
   `--dry-run` or `--mock` first and inspect the exact HTTP path it would call.
 
@@ -197,9 +312,11 @@ These are the only officially supported APIs going forward and are required for
 - Test coverage is focused on the API layer and data parsing (~25% instruction,
   ~24% line). The GUI (`gui`), interactive shell, MCP server, and AI agent
   (`agent`) are not yet covered by automated tests.
+  ([issue](issues/things-that-do-not-work/untested-surfaces.md))
 - `recipe package-migrate` downloads the package from the active environment and
   uploads/installs it to `--target-url` with the supplied auth. Verify that your
   user has package-manager rights on both environments before running it.
+  ([issue](issues/things-that-do-not-work/package-migrate-permissions.md))
 
 ## Architecture
 
@@ -356,11 +473,16 @@ Once configured, ask Claude:
 
 ## For Architects
 
+- **Two tools, stated contracts** — remote REST surface and offline Oak
+  maintenance, each with its operating model documented up front (see "Two
+  tools, two operating models")
 - **No AEM dependency** - Runs standalone, no bundle install required
 - **Standard Java 21** - Uses picocli, JLine3, Apache HttpClient
 - **Extensible** - Add new commands via API classes
 - **Tested** - Unit tests with JUnit 5
 - **MCP Ready** - Native Claude Code integration via MCP protocol
+- **Per-command compat tracking** - gaps and version caveats are tracked per
+  command in [`issues/`](issues/) and summarized in the fidelity table
 
 ## License
 
