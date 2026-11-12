@@ -207,10 +207,32 @@ for the current verification status of these wrappers.
 | `completion` | Generate shell completion scripts |
 | `gui` | Launch the AEM API Studio (desktop GUI) |
 | `recipe` | Predefined multi-step recipes (site-launch, content-backup, …) |
+| `query` | Generic Query Builder searches (`/bin/querybuilder.json`) |
+| `jcr` | Generic JCR node operations (get/save/delete/copy/move via Sling POST servlet) |
+| `openapi` | Explore Adobe's hosted OpenAPI specs and generate mock responses from them |
 
 > `oak` and `oak-upgrade` are **not part of this remote surface** — they are
 > the offline repository-maintenance tool with its own operating model; see
 > "Oak maintenance" below.
+
+### OpenAPI-driven exploration & mocks
+
+Adobe publishes OpenAPI specs for the AEMaaCS APIs (Launches, MSM, Assets
+Author, Content AI, …) on a Redocly registry:
+`https://api.redocly.com/registry/bundle/adobe-developers/<SPEC>/stable/openapi.yaml?branch=prod`
+
+```bash
+# Discover the full surface of an API the CLI doesn't cover yet
+aem-api openapi list -s https://api.redocly.com/registry/bundle/adobe-developers/AEM-launches-author/stable/openapi.yaml?branch=prod
+
+# Generate an example response from the spec's schemas (print or save as fixture)
+aem-api openapi mock -s <spec-url> -o "GET /"
+aem-api openapi mock -s <spec-url> -o "POST /{launchId}/promote" --status 202 --out promote.json
+```
+
+Limitations: schemas without `properties` (e.g. free-form or `allOf`-composed
+objects) synthesize as `{}`; refs are resolved locally only (`#/...`); async
+202 responses with no JSON body correctly produce no mock.
 
 ### Global flags
 
@@ -275,6 +297,9 @@ release. Detailed gaps live in [`issues/`](issues/things-that-do-not-work/).
 | `workflow inbox/history/purge` | classic `/bin/*`, `/etc/*` | mock data | mock only; classic-only |
 | `packages` + `content-backup` | `/crx/packmgr` | `AemCloudMockE2ETest`, `PackagesApiMockTest` | mock + live AEM SDK author |
 | `tags`, `users` | `/bin/querybuilder.json` | `TagsApiMockTest`, `UsersApiMockTest` | mock only; response shape varies by AEM version |
+| `query` | `/bin/querybuilder.json` (generic params) | `QueryApiMockTest` | arg assembly + parsing tested; not verified against live AEM |
+| `jcr` | Sling POST servlet + node JSON renderer | `JcrApiMockTest` | arg assembly tested; not verified against live AEM |
+| `openapi` | Adobe Redocly registry specs | `OpenApiSupportTest` | spec parsing + synthesis tested against bundled fixture; live-tested against the Launches spec |
 | `replicate` | classic `/bin/replicate.json` | mock data | mock only |
 | `oak` check/compact/checkpoints/index/backup/export | offline segment store | arg-assembly tests | not verified on a live segment store; jar must match Oak version |
 | `oak-upgrade` | offline segment store | arg-assembly tests | not verified on a live migration |
@@ -334,9 +359,6 @@ for behavior that has since been verified or fixed. Highlights:
   uploads/installs it to `--target-url` with the supplied auth. Verify that your
   user has package-manager rights on both environments before running it.
   ([issue](issues/things-that-do-not-work/package-migrate-permissions.md))
-- No generic `query` command — Query Builder is an official Adobe API but only
-  the hard-coded `tags`/`users` queries are exposed.
-  ([issue](issues/things-that-do-not-work/no-generic-query-command.md))
 - Launches, MSM, Adobe's next-gen Pages/Sites OpenAPIs, Content AI, AEM
   Events, and Forms document generation are not covered; the `assets` command
   uses the legacy API rather than the newer Assets Author OpenAPI.

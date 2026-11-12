@@ -3,8 +3,10 @@ package com.aemtools.aem.mcp;
 import com.aemtools.aem.api.AssetsApi;
 import com.aemtools.aem.api.ContentFragmentApi;
 import com.aemtools.aem.api.GraphQLApi;
+import com.aemtools.aem.api.JcrApi;
 import com.aemtools.aem.api.PagesApi;
 import com.aemtools.aem.api.PackagesApi;
+import com.aemtools.aem.api.QueryApi;
 import com.aemtools.aem.api.ReplicationApi;
 import com.aemtools.aem.api.TagsApi;
 import com.aemtools.aem.api.UsersApi;
@@ -29,6 +31,8 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -57,6 +61,8 @@ public class AemMcpServer {
   private GraphQLApi graphqlApi;
   private PagesApi pagesApi;
   private PackagesApi packagesApi;
+  private QueryApi queryApi;
+  private JcrApi jcrApi;
 
   public AemMcpServer() {
     this(new InputStreamReader(System.in), new PrintWriter(System.out, true));
@@ -84,6 +90,8 @@ public class AemMcpServer {
       graphqlApi = new GraphQLApi(client);
       pagesApi = new PagesApi(client);
       packagesApi = new PackagesApi(client);
+      queryApi = new QueryApi(client);
+      jcrApi = new JcrApi(client);
     }
   }
 
@@ -485,6 +493,31 @@ public class AemMcpServer {
             "force", prop("boolean", "Run even if a local AEM instance appears to be running", false)
         )));
 
+    tools.add(buildTool("aem_query", "Run a Query Builder search (content search via /bin/querybuilder.json)",
+        Map.of(
+            "path", prop("string", "Content path to search under (default /content)", false),
+            "type", prop("string", "Primary node type filter, e.g. cq:Page or dam:Asset", false),
+            "params", prop("string", "Comma-separated extra Query Builder key=value parameters, e.g. property=cq:tags,property.value=geo:us", false),
+            "limit", prop("integer", "Max hits (0 = unbounded with guessTotal)", false)
+        )));
+
+    tools.add(buildTool("aem_jcr_get", "Read a JCR node as JSON (node renderer with depth)",
+        Map.of(
+            "path", prop("string", "Node path", true),
+            "depth", prop("integer", "Recursion depth (-1 = all levels, default 1)", false)
+        )));
+
+    tools.add(buildTool("aem_jcr_save", "Save properties on a JCR node via the Sling POST servlet",
+        Map.of(
+            "path", prop("string", "Node path", true),
+            "properties", prop("string", "Comma-separated key=value properties; Sling operators allowed in keys, e.g. cq:tags@TypeHint=String[]", true)
+        )));
+
+    tools.add(buildTool("aem_jcr_delete", "Delete a JCR node",
+        Map.of(
+            "path", prop("string", "Node path", true)
+        )));
+
     return Map.of("tools", tools);
   }
 
@@ -592,6 +625,10 @@ public class AemMcpServer {
       case "aem_oak_reindex" -> handleOakReindex(args);
       case "aem_oak_backup" -> handleOakBackup(args);
       case "aem_oak_upgrade" -> handleOakUpgrade(args);
+      case "aem_query" -> handleQuery(args);
+      case "aem_jcr_get" -> handleJcrGet(args);
+      case "aem_jcr_save" -> handleJcrSave(args);
+      case "aem_jcr_delete" -> handleJcrDelete(args);
       default -> throw new IllegalArgumentException("Unknown tool: " + name);
     };
 
@@ -1381,6 +1418,67 @@ public class AemMcpServer {
     } catch (IllegalStateException e) {
       return Map.of("error", e.getMessage());
     }
+  }
+
+  private Object handleQuery(JsonNode args) throws Exception {
+    String path = args.path("path").asText(null);
+    String type = args.path("type").asText(null);
+    String rawParams = args.path("params").asText(null);
+    int limit = args.path("limit").asInt(20);
+
+    List<String> params = new ArrayList<>();
+    if (rawParams != null && !rawParams.isBlank()) {
+      for (String part : rawParams.split(",")) {
+        if (!part.isBlank()) {
+          params.add(part.trim());
+        }
+      }
+    }
+
+    JsonNode response = queryApi.search(path, type, params, limit);
+    List<String> paths = QueryApi.hitPaths(response);
+    return Map.of(
+        "total", response.path("total").asInt(paths.size()),
+        "shown", paths.size(),
+        "hits", paths
+    );
+  }
+
+  private Object handleJcrGet(JsonNode args) throws Exception {
+    String path = args.path("path").asText(null);
+    int depth = args.path("depth").asInt(1);
+    if (path == null || path.isBlank()) {
+      return Map.of("error", "path is required");
+    }
+    return jcrApi.getNode(path, depth);
+  }
+
+  private Object handleJcrSave(JsonNode args) throws Exception {
+    String path = args.path("path").asText(null);
+    String rawProps = args.path("properties").asText(null);
+    if (path == null || path.isBlank() || rawProps == null || rawProps.isBlank()) {
+      return Map.of("error", "path and properties are required");
+    }
+    Map<String, Object> props = new LinkedHashMap<>();
+    for (String part : rawProps.split(",")) {
+      int eq = part.indexOf('=');
+      if (eq > 0) {
+        props.put(part.substring(0, eq).trim(), part.substring(eq + 1));
+      }
+    }
+    if (props.isEmpty()) {
+      return Map.of("error", "no valid key=value properties parsed");
+    }
+    return jcrApi.saveNode(path, props);
+  }
+
+  private Object handleJcrDelete(JsonNode args) throws Exception {
+    String path = args.path("path").asText(null);
+    if (path == null || path.isBlank()) {
+      return Map.of("error", "path is required");
+    }
+    boolean deleted = jcrApi.deleteNode(path);
+    return Map.of("deleted", deleted, "path", path);
   }
 
   private ObjectNode oakResult(List<String> command) {

@@ -96,7 +96,7 @@ public class CompletionGenerator {
     }
 
     private static String getCommands() {
-        return "shell connect cf assets sites forms config graphql translation cloudmgr folders tags workflow users replicate packages models audit agent completion gui recipe oak oak-upgrade help version";
+        return "shell connect cf assets sites forms config graphql translation cloudmgr folders tags workflow users replicate packages models audit agent completion gui recipe oak oak-upgrade query jcr openapi help version";
     }
 
     private static String getOptions() {
@@ -126,6 +126,9 @@ public class CompletionGenerator {
             'agent:AI-powered AEM assistant'
             'oak:Offline Oak maintenance via oak-run'
             'oak-upgrade:Offline Oak content migration via oak-upgrade'
+            'query:Run Query Builder searches'
+            'jcr:Generic JCR node operations'
+            'openapi:Explore OpenAPI specs and generate mocks'
             'help:Show help'
             'version:Show version'""";
     }
@@ -167,6 +170,15 @@ public class CompletionGenerator {
                 ;;
             oak-upgrade)
                 _arguments '--jar[Oak-upgrade jar path]' '--source[Source repository]' '--target[Target repository]' '--include[Include paths]' '--exclude[Exclude paths]' '--force[Force run]' '-h[Help]'
+                ;;
+            query)
+                _arguments '-p[Search path]' '-t[Node type]' '-q[Query parameter key=value]' '-m[Limit]' '--full[Full response]' '-h[Help]'
+                ;;
+            jcr)
+                _arguments '-p[Node path]' '-d[Depth]' '-t[Property key=value]' '-s[Source]' '--dest[Destination]' '--confirm[Confirm]' '-h[Help]'
+                ;;
+            openapi)
+                _arguments '-s[Spec URL or file]' '-o[Operation ID]' '--status[Response status]' '--out[Output file]' '-h[Help]'
                 ;;""";
     }
 }

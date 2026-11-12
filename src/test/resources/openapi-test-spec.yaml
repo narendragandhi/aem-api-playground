@@ -1,0 +1,73 @@
+openapi: 3.0.3
+info:
+  title: Test API
+  version: '1.0'
+paths:
+  /launches:
+    get:
+      operationId: listLaunches
+      summary: List all Launches
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaunchList'
+  /launches/{id}:
+    get:
+      operationId: getLaunch
+      summary: Get a Launch
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Launch'
+    delete:
+      operationId: deleteLaunch
+      summary: Delete a Launch
+      responses:
+        '204':
+          description: No content
+components:
+  schemas:
+    LaunchList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Launch'
+        total:
+          type: integer
+    Launch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: spring-promo
+          description: Launch name
+        created:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - draft
+            - ready
+        source:
+          $ref: '#/components/schemas/Launch'
+        parent:
+          $ref: '#/components/schemas/Launch'
+    Cyclic:
+      type: object
+      properties:
+        self:
+          $ref: '#/components/schemas/Cyclic'
+        flag:
+          type: boolean

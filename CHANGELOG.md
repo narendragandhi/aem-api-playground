@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `openapi` command — OpenAPI-driven exploration and mock generation. Loads
+  OpenAPI 3 specs (YAML/JSON, URL or local file) and synthesizes example
+  responses from their schemas (explicit `example`/`examples`/`default`
+  first, type-based synthesis otherwise, local `$ref` resolution with a
+  cycle guard, depth cap, and 2XX fallback). Adobe hosts the AEMaaCS API
+  specs on a Redocly registry, so previously uncovered surfaces (Launches,
+  MSM, Assets Author, …) can be discovered with `openapi list` and mocked
+  with `openapi mock` before any dedicated command exists. Verified live
+  against Adobe's Launches spec. 8 new tests (296 total); the Launches
+  issue file now points to this as a discovery workaround.
+- Generic content-search and JCR commands (closing the top coverage gaps from
+  the Adobe developer portal audit): `query run` runs arbitrary Query Builder
+  searches via `/bin/querybuilder.json` (repeatable `--param k=v`, node-type
+  filter, unbounded limit with `guessTotal`), and `jcr get/save/delete/copy/
+  move` performs generic node operations via the Sling POST servlet and node
+  JSON renderer with `--dry-run`/`--mock` short-circuiting so no network is
+  touched. Four new MCP tools (`aem_query`, `aem_jcr_get`, `aem_jcr_save`,
+  `aem_jcr_delete`). 11 new tests (288 total); the generic-query issue was
+  moved to `issues/things-that-now-work/`.
 - Gap tracking from the Adobe developer portal audit
   (developer.adobe.com/experience-cloud/experience-manager-apis): four new
   issue files documenting that the generic `query` command, Launches, MSM,

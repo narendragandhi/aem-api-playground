@@ -9,4 +9,8 @@ the CLI has no launches command at all.
 in the author UI or via curl.
 **Workaround:** author UI; `--dry-run` recipes that create page copies under
 `/content/launches` mimic the simplest launch flows but are not a real
-launch.
+launch. For discovery and mock fixtures, `aem-api openapi list/mock` can
+load Adobe's Launches OpenAPI spec
+(`https://api.redocly.com/registry/bundle/adobe-developers/AEM-launches-author/stable/openapi.yaml?branch=prod`)
+and synthesize example responses — but the CLI cannot execute launch
+operations against a real instance.

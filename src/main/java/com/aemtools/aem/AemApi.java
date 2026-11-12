@@ -12,10 +12,14 @@ import com.aemtools.aem.commands.FoldersCommand;
 import com.aemtools.aem.commands.FormsCommand;
 import com.aemtools.aem.commands.GraphQLCommand;
 import com.aemtools.aem.commands.GuiCommand;
+import com.aemtools.aem.commands.JcrCommand;
 import com.aemtools.aem.commands.ModelsCommand;
 import com.aemtools.aem.commands.OakCommand;
 import com.aemtools.aem.commands.OakUpgradeCommand;
+import com.aemtools.aem.commands.OpenApiCommand;
 import com.aemtools.aem.commands.PackagesCommand;
+import com.aemtools.aem.commands.QueryCommand;
+import com.aemtools.aem.commands.RecipeCommand;
 import com.aemtools.aem.commands.ReplicationCommand;
 import com.aemtools.aem.commands.ShellCommand;
 import com.aemtools.aem.commands.SitesCommand;
@@ -82,7 +86,10 @@ import java.util.concurrent.Callable;
         GuiCommand.class,
         RecipeCommand.class,  // Moved to commands package
         OakCommand.class,
-        OakUpgradeCommand.class
+        OakUpgradeCommand.class,
+        QueryCommand.class,
+        JcrCommand.class,
+        OpenApiCommand.class
     }
 )
 public class AemApi implements Callable<Integer> {
