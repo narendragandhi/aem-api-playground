@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Gap tracking from the Adobe developer portal audit
+  (developer.adobe.com/experience-cloud/experience-manager-apis): four new
+  issue files documenting that the generic `query` command, Launches, MSM,
+  Adobe's next-gen Pages/Sites OpenAPIs, Content AI, AEM Events, Forms
+  document APIs, and the newer Assets Author OpenAPI are not covered by the
+  CLI; linked from the README "Current limitations" section.
 - README/AGENTS reframe: the repo is now explicitly presented as **two tools
   with separate contracts** — the remote AEM REST surface (everything except
   `oak`/`oak-upgrade`) and the offline repository-maintenance tool

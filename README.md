@@ -1,6 +1,23 @@
 # AEM API CLI
 
-A command-line interface for testing Adobe Experience Manager (AEM) APIs.
+**The command line for Adobe Experience Manager.** One jar, nothing to
+install on AEM, every generation of AEM (6.x, AMS, AEMaaCS) — plus an MCP
+server that lets Claude operate AEM *and know what it doesn't know*, instead
+of hallucinating Adobe APIs.
+
+**The scenario this solves:** a content team just pointed their next project
+at AEM as a Cloud Service while their 6.5 content lives on-prem.
+
+```bash
+aem-api connect --env prod                 # once; AES-256-GCM encrypted creds
+aem-api sites pages -p /content/we-retail  # works on 6.5 (classic surface)
+aem-api recipe package-migrate             # pull content from 6.5, land on Cloud author
+aem-api --mock cf list                     # learn the whole surface with zero AEM
+```
+
+…or hand the same job to Claude via the [MCP server](#mcp-server-for-claude-code) —
+same capability, plus guardrails: the agent tracks per-command version
+compatibility in [`issues/`](issues/) and refuses what it can't prove.
 
 ## Two tools, two operating models
 
@@ -317,6 +334,15 @@ for behavior that has since been verified or fixed. Highlights:
   uploads/installs it to `--target-url` with the supplied auth. Verify that your
   user has package-manager rights on both environments before running it.
   ([issue](issues/things-that-do-not-work/package-migrate-permissions.md))
+- No generic `query` command — Query Builder is an official Adobe API but only
+  the hard-coded `tags`/`users` queries are exposed.
+  ([issue](issues/things-that-do-not-work/no-generic-query-command.md))
+- Launches, MSM, Adobe's next-gen Pages/Sites OpenAPIs, Content AI, AEM
+  Events, and Forms document generation are not covered; the `assets` command
+  uses the legacy API rather than the newer Assets Author OpenAPI.
+  ([issue](issues/things-that-do-not-work/launches-not-covered.md),
+  [issue](issues/things-that-do-not-work/assets-author-openapi-not-covered.md),
+  [issue](issues/things-that-do-not-work/msm-nextgen-pages-contentai-events-not-covered.md))
 
 ## Architecture
 
